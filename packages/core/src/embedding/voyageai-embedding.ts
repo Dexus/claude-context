@@ -149,6 +149,21 @@ export class VoyageAIEmbedding extends Embedding {
     static getSupportedModels(): Record<string, { dimension: number | string; contextLength: number; description: string }> {
         return {
             // Latest recommended models
+            'voyage-4-large': {
+                dimension: '1024 (default), 256, 512, 2048',
+                contextLength: 32000,
+                description: 'The best general-purpose and multilingual retrieval quality. All embeddings created with the 4 series are compatible with each other.'
+            },
+            'voyage-4': {
+                dimension: '1024 (default), 256, 512, 2048',
+                contextLength: 32000,
+                description: 'Optimized for general-purpose and multilingual retrieval quality. All embeddings created with the 4 series are compatible with each other.'
+            },
+            'voyage-4-lite': {
+                dimension: '1024 (default), 256, 512, 2048',
+                contextLength: 32000,
+                description: 'Optimized for latency and cost. All embeddings created with the 4 series are compatible with each other.'
+            },
             'voyage-3-large': {
                 dimension: '1024 (default), 256, 512, 2048',
                 contextLength: 32000,
