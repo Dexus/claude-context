@@ -26,10 +26,15 @@ const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
     '.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.cpp', '.c', '.h', '.hpp',
     '.cs', '.go', '.rs', '.php', '.rb', '.swift', '.kt', '.scala', '.m', '.mm',
+    '.dart',
+    // Infrastructure and configuration
+    '.tf', '.tfvars', '.hcl',
+    '.sql',
+    '.yaml', '.yml',
     // Text and markup files
     '.md', '.markdown', '.ipynb',
-    // '.txt',  '.json', '.yaml', '.yml', '.xml', '.html', '.htm',
-    // '.css', '.scss', '.less', '.sql', '.sh', '.bash', '.env'
+    // '.txt',  '.json', '.xml', '.html', '.htm',
+    // '.css', '.scss', '.less', '.sh', '.bash', '.env'
 ];
 
 const DEFAULT_IGNORE_PATTERNS = [
@@ -676,7 +681,9 @@ export class Context {
                     await traverseDirectory(fullPath);
                 } else if (entry.isFile()) {
                     const ext = path.extname(entry.name);
-                    if (this.supportedExtensions.includes(ext)) {
+                    // Check for supported extensions or Dockerfile (which has no extension)
+                    const isDockerfile = entry.name === 'Dockerfile' || entry.name.startsWith('Dockerfile.');
+                    if (this.supportedExtensions.includes(ext) || isDockerfile) {
                         files.push(fullPath);
                     }
                 }
@@ -714,7 +721,7 @@ export class Context {
 
             try {
                 const content = await fs.promises.readFile(filePath, 'utf-8');
-                const language = this.getLanguageFromExtension(path.extname(filePath));
+                const language = this.getLanguageFromFilePath(filePath);
                 const chunks = await this.codeSplitter.split(content, language, filePath);
 
                 // Log files with many chunks or large content
@@ -882,9 +889,17 @@ export class Context {
     }
 
     /**
-     * Get programming language based on file extension
+     * Get programming language based on file path (extension or special filenames)
      */
-    private getLanguageFromExtension(ext: string): string {
+    private getLanguageFromFilePath(filePath: string): string {
+        const fileName = path.basename(filePath);
+        const ext = path.extname(filePath);
+
+        // Handle special filenames without extensions
+        if (fileName === 'Dockerfile' || fileName.startsWith('Dockerfile.')) {
+            return 'dockerfile';
+        }
+
         const languageMap: Record<string, string> = {
             '.ts': 'typescript',
             '.tsx': 'typescript',
@@ -906,7 +921,14 @@ export class Context {
             '.scala': 'scala',
             '.m': 'objective-c',
             '.mm': 'objective-c',
-            '.ipynb': 'jupyter'
+            '.ipynb': 'jupyter',
+            '.dart': 'dart',
+            '.tf': 'terraform',
+            '.tfvars': 'terraform',
+            '.hcl': 'hcl',
+            '.sql': 'sql',
+            '.yaml': 'yaml',
+            '.yml': 'yaml'
         };
         return languageMap[ext] || 'text';
     }

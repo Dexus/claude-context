@@ -45,5 +45,25 @@
         "url": "https://github.com/dannyboy2042/claude-context.git"
     },
     "license": "MIT",
-    "author": "Claude Context Community"
+    "author": "Claude Context Community",
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "@derekstride/tree-sitter-sql",
+            "@tree-sitter-grammars/tree-sitter-hcl",
+            "@tree-sitter-grammars/tree-sitter-yaml",
+            "tree-sitter-dart",
+            "tree-sitter",
+            "tree-sitter-c-sharp",
+            "tree-sitter-cpp",
+            "tree-sitter-go",
+            "tree-sitter-java",
+            "tree-sitter-javascript",
+            "tree-sitter-python",
+            "tree-sitter-rust",
+            "tree-sitter-typescript"
+        ],
+        "overrides": {
+            "tree-sitter@>0.21.1": "0.21.1"
+        }
+    }
 }

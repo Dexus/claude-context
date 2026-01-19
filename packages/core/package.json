@@ -33,6 +33,10 @@
         "tree-sitter-python": "^0.21.0",
         "tree-sitter-rust": "^0.21.0",
         "tree-sitter-typescript": "^0.21.2",
+        "tree-sitter-dart": "^1.0.0",
+        "@tree-sitter-grammars/tree-sitter-hcl": "^1.2.0",
+        "@derekstride/tree-sitter-sql": "^0.3.11",
+        "@tree-sitter-grammars/tree-sitter-yaml": "^0.7.1",
         "typescript": "^5.9.3",
         "voyageai": "^0.1.0"
     },
