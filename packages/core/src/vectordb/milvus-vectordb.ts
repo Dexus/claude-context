@@ -121,7 +121,7 @@ export class MilvusVectorDatabase implements VectorDatabase {
         }
     }
 
-    async createCollection(collectionName: string, dimension: number, _description?: string): Promise<void> {
+    async createCollection(collectionName: string, dimension: number, description?: string): Promise<void> {
         await this.ensureInitialized();
 
         console.log('Beginning collection creation:', collectionName);
@@ -333,7 +333,7 @@ export class MilvusVectorDatabase implements VectorDatabase {
         }
     }
 
-    async createHybridCollection(collectionName: string, dimension: number, _description?: string): Promise<void> {
+    async createHybridCollection(collectionName: string, dimension: number, description?: string): Promise<void> {
         await this.ensureInitialized();
 
         console.log('Beginning hybrid collection creation:', collectionName);
