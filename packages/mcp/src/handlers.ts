@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as crypto from "crypto";
 import { Context, COLLECTION_LIMIT_MESSAGE } from "@dannyboy2042/claude-context-core";
 import { SnapshotManager } from "./snapshot.js";
 import { ensureAbsolutePath, truncateContent, trackCodebasePath } from "./utils.js";
@@ -337,7 +336,7 @@ export class ToolHandlers {
             }
 
             // Use the existing Context instance for indexing.
-            let contextForThisTask = this.context;
+            const contextForThisTask = this.context;
             if (splitterType !== 'ast') {
                 console.warn(`[BACKGROUND-INDEX] Non-AST splitter '${splitterType}' requested; falling back to AST splitter`);
             }

@@ -13,7 +13,6 @@ import {
     VectorDocument,
     VectorSearchResult,
     HybridSearchRequest,
-    HybridSearchOptions,
     HybridSearchResult
 } from './vectordb';
 import { SemanticSearchResult } from './types';
@@ -424,7 +423,7 @@ export class Context {
         if (isHybrid === true) {
             try {
                 // Check collection stats to see if it has data
-                const stats = await this.vectorDatabase.query(collectionName, '', ['id'], 1);
+                await this.vectorDatabase.query(collectionName, '', ['id'], 1);
                 console.log(`🔍 Collection '${collectionName}' exists and appears to have data`);
             } catch (error) {
                 console.log(`⚠️  Collection '${collectionName}' exists but may be empty or not properly indexed:`, error);
@@ -824,7 +823,9 @@ export class Context {
 
                 const relativePath = path.relative(codebasePath, chunk.metadata.filePath);
                 const fileExtension = path.extname(chunk.metadata.filePath);
-                const { filePath, startLine, endLine, ...restMetadata } = chunk.metadata;
+                // Destructure to exclude filePath, startLine, endLine from restMetadata
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { filePath: _fp, startLine: _sl, endLine: _el, ...restMetadata } = chunk.metadata;
 
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
@@ -854,7 +855,9 @@ export class Context {
 
                 const relativePath = path.relative(codebasePath, chunk.metadata.filePath);
                 const fileExtension = path.extname(chunk.metadata.filePath);
-                const { filePath, startLine, endLine, ...restMetadata } = chunk.metadata;
+                // Destructure to exclude filePath, startLine, endLine from restMetadata
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { filePath: _fp2, startLine: _sl2, endLine: _el2, ...restMetadata } = chunk.metadata;
 
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
@@ -947,7 +950,7 @@ export class Context {
      */
     private async loadIgnorePatterns(codebasePath: string): Promise<void> {
         try {
-            let fileBasedPatterns: string[] = [];
+            const fileBasedPatterns: string[] = [];
 
             // Load all .xxxignore files in codebase directory
             const ignoreFiles = await this.findIgnoreFiles(codebasePath);
@@ -1008,10 +1011,11 @@ export class Context {
      */
     private async loadGlobalIgnoreFile(): Promise<string[]> {
         try {
-            const homeDir = require('os').homedir();
+            const os = await import('os');
+            const homeDir = os.homedir();
             const globalIgnorePath = path.join(homeDir, '.context', '.contextignore');
             return await this.loadIgnoreFile(globalIgnorePath, 'global .contextignore');
-        } catch (error) {
+        } catch {
             // Global ignore file is optional, don't log warnings
             return [];
         }
@@ -1037,7 +1041,7 @@ export class Context {
                 console.log(`📄 ${fileName} file found but no valid patterns detected`);
                 return [];
             }
-        } catch (error) {
+        } catch {
             if (fileName.includes('global')) {
                 console.log(`📄 No ${fileName} file found`);
             }
@@ -1184,7 +1188,6 @@ export class Context {
         const splitterName = this.codeSplitter.constructor.name;
 
         if (splitterName === 'AstCodeSplitter') {
-            const { AstCodeSplitter } = require('./splitter/ast-splitter');
             return {
                 type: 'ast',
                 hasBuiltinFallback: true,
@@ -1206,7 +1209,6 @@ export class Context {
         const splitterName = this.codeSplitter.constructor.name;
 
         if (splitterName === 'AstCodeSplitter') {
-            const { AstCodeSplitter } = require('./splitter/ast-splitter');
             return AstCodeSplitter.isLanguageSupported(language);
         }
 
@@ -1222,7 +1224,6 @@ export class Context {
         const splitterName = this.codeSplitter.constructor.name;
 
         if (splitterName === 'AstCodeSplitter') {
-            const { AstCodeSplitter } = require('./splitter/ast-splitter');
             const isSupported = AstCodeSplitter.isLanguageSupported(language);
 
             return {

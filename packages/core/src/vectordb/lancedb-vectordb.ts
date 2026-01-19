@@ -8,8 +8,7 @@ import {
     VectorDatabase,
     HybridSearchRequest,
     HybridSearchOptions,
-    HybridSearchResult,
-    COLLECTION_LIMIT_MESSAGE
+    HybridSearchResult
 } from './types';
 
 export interface LanceDBConfig {
@@ -68,7 +67,7 @@ export class LanceDBVectorDatabase implements VectorDatabase {
         }
     }
 
-    async createCollection(collectionName: string, dimension: number, description?: string): Promise<void> {
+    async createCollection(collectionName: string, dimension: number, _description?: string): Promise<void> {
         await this.ensureInitialized();
 
         console.log('Beginning collection creation:', collectionName);
@@ -156,7 +155,7 @@ export class LanceDBVectorDatabase implements VectorDatabase {
             const table = await this.db!.openTable(collectionName);
             this.tables.set(collectionName, table);
             return table;
-        } catch (error) {
+        } catch {
             throw new Error(`Table '${collectionName}' does not exist`);
         }
     }
@@ -310,7 +309,7 @@ export class LanceDBVectorDatabase implements VectorDatabase {
         }
     }
 
-    async createHybridCollection(collectionName: string, dimension: number, description?: string): Promise<void> {
+    async createHybridCollection(collectionName: string, dimension: number, _description?: string): Promise<void> {
         await this.ensureInitialized();
 
         console.log('Beginning hybrid collection creation:', collectionName);

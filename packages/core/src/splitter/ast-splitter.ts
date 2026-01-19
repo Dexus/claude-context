@@ -1,14 +1,22 @@
 import Parser from 'tree-sitter';
 import { Splitter, CodeChunk } from './index';
 
-// Language parsers
+// Language parsers - native modules require() is necessary
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const JavaScript = require('tree-sitter-javascript');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const TypeScript = require('tree-sitter-typescript').typescript;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Python = require('tree-sitter-python');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Java = require('tree-sitter-java');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Cpp = require('tree-sitter-cpp');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Go = require('tree-sitter-go');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Rust = require('tree-sitter-rust');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const CSharp = require('tree-sitter-c-sharp');
 
 // Node types that represent logical code units
@@ -34,7 +42,8 @@ export class AstCodeSplitter implements Splitter {
         if (chunkOverlap) this.chunkOverlap = chunkOverlap;
         this.parser = new Parser();
 
-        // Initialize fallback splitter
+        // Initialize fallback splitter - require() used to avoid circular dependency
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { LangChainCodeSplitter } = require('./langchain-splitter');
         this.langchainFallback = new LangChainCodeSplitter(chunkSize, chunkOverlap);
     }
@@ -173,7 +182,7 @@ export class AstCodeSplitter implements Splitter {
         return this.addOverlap(refinedChunks);
     }
 
-    private splitLargeChunk(chunk: CodeChunk, originalCode: string): CodeChunk[] {
+    private splitLargeChunk(chunk: CodeChunk, _originalCode: string): CodeChunk[] {
         const lines = chunk.content.split('\n');
         const subChunks: CodeChunk[] = [];
         let currentChunk = '';
@@ -254,13 +263,19 @@ export class AstCodeSplitter implements Splitter {
     }
 
     /**
+     * Get list of supported languages for AST splitting
+     */
+    static getSupportedLanguages(): string[] {
+        return [
+            'javascript', 'js', 'typescript', 'ts', 'python', 'py',
+            'java', 'cpp', 'c++', 'c', 'go', 'rust', 'rs', 'csharp', 'cs'
+        ];
+    }
+
+    /**
      * Check if AST splitting is supported for the given language
      */
     static isLanguageSupported(language: string): boolean {
-        const supportedLanguages = [
-            'javascript', 'js', 'typescript', 'ts', 'python', 'py',
-            'java', 'cpp', 'c++', 'c', 'go', 'rust', 'rs', 'cs'
-        ];
-        return supportedLanguages.includes(language.toLowerCase());
+        return AstCodeSplitter.getSupportedLanguages().includes(language.toLowerCase());
     }
 }

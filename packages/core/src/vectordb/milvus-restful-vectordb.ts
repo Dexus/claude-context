@@ -79,7 +79,7 @@ export class MilvusRestfulVectorDatabase implements VectorDatabase {
      * Common logic for both gRPC and REST implementations
      */
     protected async resolveAddress(): Promise<string> {
-        let finalConfig = { ...this.config };
+        const finalConfig = { ...this.config };
 
         // If address is not provided, get it using token
         if (!finalConfig.address && finalConfig.token) {
@@ -173,7 +173,7 @@ export class MilvusRestfulVectorDatabase implements VectorDatabase {
         }
     }
 
-    async createCollection(collectionName: string, dimension: number, description?: string): Promise<void> {
+    async createCollection(collectionName: string, dimension: number, _description?: string): Promise<void> {
         await this.ensureInitialized();
 
         try {
@@ -503,7 +503,7 @@ export class MilvusRestfulVectorDatabase implements VectorDatabase {
         }
     }
 
-    async createHybridCollection(collectionName: string, dimension: number, description?: string): Promise<void> {
+    async createHybridCollection(collectionName: string, dimension: number, _description?: string): Promise<void> {
         try {
             const restfulConfig = this.config as MilvusRestfulConfig;
 
