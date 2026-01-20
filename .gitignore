@@ -62,6 +62,8 @@ CLAUDE.md
 
 .cursor/*
 
+coverage/
+
 # Auto Claude data directory
 .auto-claude/
 
