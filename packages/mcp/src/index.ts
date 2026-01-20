@@ -75,7 +75,7 @@ class ContextMcpServer {
         });
 
         // Initialize managers
-        this.snapshotManager = new SnapshotManager();
+        this.snapshotManager = new SnapshotManager(this.context);
         this.syncManager = new SyncManager(this.context, this.snapshotManager);
         this.toolHandlers = new ToolHandlers(this.context, this.snapshotManager);
 

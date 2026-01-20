@@ -1,14 +1,17 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { Context } from "@dexus1985/claude-context-core";
 import { CodebaseSnapshot } from "./config.js";
 
 export class SnapshotManager {
+    private context: Context;
     private snapshotFilePath: string;
     private indexedCodebases: string[] = [];
     private indexingCodebases: Map<string, number> = new Map(); // Map of codebase path to progress percentage
 
-    constructor() {
+    constructor(context: Context) {
+        this.context = context;
         // Initialize snapshot file path
         this.snapshotFilePath = path.join(os.homedir(), '.context', 'mcp-codebase-snapshot.json');
     }
