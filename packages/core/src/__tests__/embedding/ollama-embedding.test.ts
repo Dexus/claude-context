@@ -365,7 +365,7 @@ describe('OllamaEmbedding', () => {
     describe('embedBatch', () => {
         it('should generate embeddings for multiple texts', async () => {
             const mockVectors = [generateVector(768), generateVector(768), generateVector(768)];
-            // First call for dimension detection
+            // First call for dimension detection, second for actual batch embed
             mockEmbed
                 .mockResolvedValueOnce(createMockResponse([generateVector(768)]))
                 .mockResolvedValueOnce(createMockResponse(mockVectors));
@@ -376,24 +376,45 @@ describe('OllamaEmbedding', () => {
             expect(results).toHaveLength(3);
         });
 
-        it('should throw error when dimension already detected', async () => {
+        it('should work with pre-configured dimension', async () => {
             const mockVectors = [generateVector(768), generateVector(768)];
-            mockEmbed.mockResolvedValue(createMockResponse(mockVectors));
+            mockEmbed.mockResolvedValueOnce(createMockResponse(mockVectors));
 
             const embedding = new OllamaEmbedding({
                 ...defaultConfig,
                 dimension: 768, // Pre-configured
             });
 
-            // This should fail because of the faulty logic in embedBatch
-            // The code has: if (!this.dimensionDetected...) { ... } else { throw new Error(...) }
-            await expect(embedding.embedBatch(['Hello', 'World'])).rejects.toThrow(
-                'Failed to detect dimension for model'
-            );
+            const results = await embedding.embedBatch(['Hello', 'World']);
+
+            expect(results).toHaveLength(2);
+            expect(results[0].dimension).toBe(768);
+            expect(results[1].dimension).toBe(768);
+        });
+
+        it('should not detect dimension again if already detected', async () => {
+            const mockVectors = [generateVector(768), generateVector(768)];
+            // First for single embed (detects dimension), second for batch
+            mockEmbed
+                .mockResolvedValueOnce(createMockResponse([generateVector(768)]))  // dimension detection
+                .mockResolvedValueOnce(createMockResponse([generateVector(768)]))  // first embed
+                .mockResolvedValueOnce(createMockResponse(mockVectors));           // batch embed
+
+            const embedding = new OllamaEmbedding(defaultConfig);
+
+            // First call detects dimension
+            await embedding.embed('First');
+
+            // Batch call should not detect dimension again
+            const results = await embedding.embedBatch(['Hello', 'World']);
+
+            expect(results).toHaveLength(2);
+            // mockEmbed should be called 3 times: detection, embed, batch
+            expect(mockEmbed).toHaveBeenCalledTimes(3);
         });
 
         it('should throw error on invalid API response', async () => {
-            // First call for dimension detection
+            // First call for dimension detection, second returns invalid
             mockEmbed
                 .mockResolvedValueOnce(createMockResponse([generateVector(768)]))
                 .mockResolvedValueOnce({ embeddings: null });
