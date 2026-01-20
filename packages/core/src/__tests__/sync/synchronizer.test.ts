@@ -13,6 +13,7 @@ describe('FileSynchronizer', () => {
     // Store original console methods
     const originalConsoleLog = console.log;
     const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
 
     // Helper function to compute expected hash
     const computeHash = (data: string, algorithm: string = 'sha256'): string => {
@@ -34,6 +35,7 @@ describe('FileSynchronizer', () => {
         // Mock console to prevent mock-fs from breaking Jest's console
         console.log = jest.fn();
         console.error = jest.fn();
+        console.warn = jest.fn();
     });
 
     afterEach(() => {
@@ -42,6 +44,7 @@ describe('FileSynchronizer', () => {
         // Restore console methods
         console.log = originalConsoleLog;
         console.error = originalConsoleError;
+        console.warn = originalConsoleWarn;
     });
 
     describe('constructor', () => {
