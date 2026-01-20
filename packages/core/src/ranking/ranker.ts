@@ -16,6 +16,32 @@ export class Ranker {
             ...DEFAULT_RANKING_CONFIG,
             ...config,
         };
+
+        // Validate weight sum
+        this.validateWeights();
+    }
+
+    /**
+     * Validate that ranking weights sum to approximately 1.0
+     * Logs a warning if weights are misconfigured
+     */
+    private validateWeights(): void {
+        const weightSum =
+            this.config.vectorWeight +
+            this.config.recencyWeight +
+            this.config.importWeight +
+            this.config.termFreqWeight;
+
+        // Allow small floating point tolerance
+        const tolerance = 0.001;
+        if (Math.abs(weightSum - 1.0) > tolerance) {
+            console.warn(
+                `[Ranker] Warning: Ranking weights sum to ${weightSum.toFixed(3)} instead of 1.0. ` +
+                `This may cause scores to be outside the expected [0, 1] range. ` +
+                `Current weights: vector=${this.config.vectorWeight}, recency=${this.config.recencyWeight}, ` +
+                `import=${this.config.importWeight}, termFreq=${this.config.termFreqWeight}`
+            );
+        }
     }
 
     /**
@@ -145,5 +171,8 @@ export class Ranker {
             ...this.config,
             ...config,
         };
+
+        // Re-validate weight sum after config update
+        this.validateWeights();
     }
 }

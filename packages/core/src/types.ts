@@ -1,9 +1,22 @@
-import type { RankingFactors } from './ranking/types';
-
 export interface SearchQuery {
     term: string;
     includeContent?: boolean;
     limit?: number;
+}
+
+/**
+ * Individual ranking factor scores
+ * Each score should be normalized to [0, 1] range
+ */
+export interface RankingFactors {
+    /** Vector similarity score from semantic search */
+    vectorScore: number;
+    /** Recency score based on file modification time */
+    recencyScore: number;
+    /** Import frequency score based on how often the file is imported */
+    importScore: number;
+    /** Term frequency score based on query term matches in content */
+    termFreqScore: number;
 }
 
 export interface SemanticSearchResult {

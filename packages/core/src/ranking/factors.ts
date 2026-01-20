@@ -90,9 +90,10 @@ export function calculateTermFrequencyScore(content: string, queryTerms: string[
     const words = content.split(/\s+/).length;
     const normalizedScore = totalMatches / Math.max(1, words);
 
-    // Apply sigmoid function to map to [0, 1] range
-    // This compresses very high scores while keeping small differences visible
-    const score = 1 / (1 + Math.exp(-SIGMOID_SCALE_FACTOR * normalizedScore));
+    // Apply exponential saturation function to map to [0, 1] range
+    // Uses 1 - exp(-k*x) which maps 0→0 and increases asymptotically to 1
+    // This provides better discrimination than sigmoid which always returns >= 0.5
+    const score = 1 - Math.exp(-SIGMOID_SCALE_FACTOR * normalizedScore);
 
     return Math.max(0, Math.min(1, score));
 }

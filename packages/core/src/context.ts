@@ -289,7 +289,7 @@ export class Context {
         codebasePath: string,
         progressCallback?: (progress: { phase: string; current: number; total: number; percentage: number }) => void,
         forceReindex: boolean = false
-    ): Promise<{ indexedFiles: number; totalChunks: number; status: 'completed' | 'limit_reached' }> {
+    ): Promise<{ indexedFiles: number; totalChunks: number; status: 'completed' | 'limit_reached' | 'partial' }> {
         const isHybrid = this.getIsHybrid();
         const searchType = isHybrid === true ? 'hybrid search' : 'semantic search';
         console.log(`🚀 Starting to index codebase with ${searchType}: ${codebasePath}`);
@@ -752,7 +752,7 @@ export class Context {
         filePaths: string[],
         codebasePath: string,
         onFileProcessed?: (filePath: string, fileIndex: number, totalFiles: number) => void
-    ): Promise<{ processedFiles: number; totalChunks: number; status: 'completed' | 'limit_reached' }> {
+    ): Promise<{ processedFiles: number; totalChunks: number; failedChunks: number; status: 'completed' | 'partial' | 'limit_reached' }> {
         const isHybrid = this.getIsHybrid();
         const EMBEDDING_BATCH_SIZE = Math.max(1, parseInt(envManager.get('EMBEDDING_BATCH_SIZE') || '100', 10));
         const CHUNK_LIMIT = 450000;
@@ -761,25 +761,55 @@ export class Context {
         // Reset import analyzer for this indexing operation
         this.importAnalyzer.reset();
 
-        let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }> = [];
-        let processedFiles = 0;
-        let totalChunks = 0;
-        let limitReached = false;
+        // PASS 1: Analyze all files for imports first (before processing chunks)
+        // This ensures importFrequencyMap is populated before chunks are indexed
+        console.log(`📊 Pass 1: Analyzing imports across ${filePaths.length} files...`);
+        const fileContents = new Map<string, { content: string; mtime: number; language: string }>();
 
-        for (let i = 0; i < filePaths.length; i++) {
-            const filePath = filePaths[i];
-
+        for (const filePath of filePaths) {
             try {
                 const stats = await fs.promises.stat(filePath);
                 const mtime = stats.mtimeMs;
                 const content = await fs.promises.readFile(filePath, 'utf-8');
                 const language = this.getLanguageFromFilePath(filePath);
+                const relativePath = path.relative(codebasePath, filePath);
+
+                // Cache file content for pass 2
+                fileContents.set(filePath, { content, mtime, language });
 
                 // Analyze imports for this file
-                const relativePath = path.relative(codebasePath, filePath);
                 if (ImportAnalyzer.isLanguageSupported(language)) {
                     this.importAnalyzer.analyzeFile(content, language, relativePath);
                 }
+            } catch (error) {
+                console.warn(`⚠️  Skipping file ${filePath} during import analysis: ${error}`);
+            }
+        }
+
+        // Build import graph after ALL files are analyzed (before chunk processing)
+        const importGraph = this.importAnalyzer.buildImportGraph();
+        this.importFrequencyMap = importGraph.frequency;
+        console.log(`📊 Import analysis complete: ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files`);
+
+        // PASS 2: Process chunks with correct import counts
+        console.log(`📝 Pass 2: Processing chunks...`);
+        let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }> = [];
+        let processedFiles = 0;
+        let totalChunks = 0;
+        let failedChunks = 0;
+        let limitReached = false;
+
+        for (let i = 0; i < filePaths.length; i++) {
+            const filePath = filePaths[i];
+            const fileData = fileContents.get(filePath);
+
+            // Skip files that failed during pass 1
+            if (!fileData) {
+                continue;
+            }
+
+            try {
+                const { content, mtime, language } = fileData;
 
                 const chunks = await this.codeSplitter.split(content, language, filePath);
 
@@ -797,6 +827,7 @@ export class Context {
 
                     // Process batch when buffer reaches EMBEDDING_BATCH_SIZE
                     if (chunkBuffer.length >= EMBEDDING_BATCH_SIZE) {
+                        const batchSize = chunkBuffer.length;
                         try {
                             await this.processChunkBuffer(chunkBuffer);
                         } catch (error) {
@@ -805,6 +836,7 @@ export class Context {
                             if (error instanceof Error) {
                                 console.error('Stack trace:', error.stack);
                             }
+                            failedChunks += batchSize;
                         } finally {
                             chunkBuffer = []; // Always clear buffer, even on failure
                         }
@@ -833,7 +865,8 @@ export class Context {
         // Process any remaining chunks in the buffer
         if (chunkBuffer.length > 0) {
             const searchType = isHybrid === true ? 'hybrid' : 'regular';
-            console.log(`📝 Processing final batch of ${chunkBuffer.length} chunks for ${searchType}`);
+            const batchSize = chunkBuffer.length;
+            console.log(`📝 Processing final batch of ${batchSize} chunks for ${searchType}`);
             try {
                 await this.processChunkBuffer(chunkBuffer);
             } catch (error) {
@@ -841,18 +874,20 @@ export class Context {
                 if (error instanceof Error) {
                     console.error('Stack trace:', error.stack);
                 }
+                failedChunks += batchSize;
             }
         }
 
-        // Build import graph after all files are analyzed
-        const importGraph = this.importAnalyzer.buildImportGraph();
-        this.importFrequencyMap = importGraph.frequency;
-        console.log(`📊 Import analysis complete: ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files`);
+        // Log warning if some chunks failed
+        if (failedChunks > 0) {
+            console.warn(`⚠️  Indexing completed with ${failedChunks} failed chunks out of ${totalChunks} total`);
+        }
 
         return {
             processedFiles,
             totalChunks,
-            status: limitReached ? 'limit_reached' : 'completed'
+            failedChunks,
+            status: limitReached ? 'limit_reached' : (failedChunks > 0 ? 'partial' : 'completed')
         };
     }
 

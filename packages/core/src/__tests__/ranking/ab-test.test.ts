@@ -496,8 +496,9 @@ describe('ABTest', () => {
 
             const result = ABTest.runTest(testQueries, mockResults, config, config);
 
-            // Precision@10 with only 3 results: 2/3
-            expect(result.configA.metrics.precisionAt10).toBe(2 / 3);
+            // Standard Precision@k always divides by k, not by result count
+            // With 3 results (2 relevant) and k=10: 2/10 = 0.2
+            expect(result.configA.metrics.precisionAt10).toBe(2 / 10);
         });
 
         it('should return 0.0 when no relevant documents in top k', () => {
@@ -652,8 +653,10 @@ describe('ABTest', () => {
 
             const result = ABTest.runTest(testQueries, mockResults, config, config);
 
-            expect(result.configA.metrics.precisionAt5).toBe(1.0);
-            expect(result.configA.metrics.precisionAt10).toBe(1.0);
+            // Standard Precision@k always divides by k
+            // With 3 results (all relevant): Precision@5 = 3/5 = 0.6, Precision@10 = 3/10 = 0.3
+            expect(result.configA.metrics.precisionAt5).toBe(3 / 5);
+            expect(result.configA.metrics.precisionAt10).toBe(3 / 10);
         });
 
         it('should handle queries with no results relevant', () => {
@@ -697,7 +700,8 @@ describe('ABTest', () => {
 
             expect(result.configA.metrics.ndcg).toBe(1.0);
             expect(result.configA.metrics.mrr).toBe(1.0);
-            expect(result.configA.metrics.precisionAt5).toBe(1.0);
+            // Standard Precision@k always divides by k: 1 relevant / 5 = 0.2
+            expect(result.configA.metrics.precisionAt5).toBe(1 / 5);
         });
     });
 

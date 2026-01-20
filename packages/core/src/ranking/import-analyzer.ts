@@ -29,6 +29,7 @@ export interface ImportGraph {
 
 export class ImportAnalyzer {
     private imports: ImportInfo[] = [];
+    private cachedGraph: ImportGraph | null = null;
 
     /**
      * Analyzes a code file and extracts import statements
@@ -39,7 +40,12 @@ export class ImportAnalyzer {
      */
     analyzeFile(code: string, language: string, filePath: string): ImportInfo[] {
         const imports: ImportInfo[] = [];
-        const lines = code.split(/\r?\n/);
+
+        // Preprocess code to handle multiline imports (JS/TS)
+        const langLower = language.toLowerCase();
+        const processedCode = this.preprocessMultilineImports(code, langLower);
+
+        const lines = processedCode.split(/\r?\n/);
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -50,7 +56,34 @@ export class ImportAnalyzer {
         }
 
         this.imports.push(...imports);
+        this.cachedGraph = null; // Invalidate cache when new imports are added
         return imports;
+    }
+
+    /**
+     * Preprocess code to join multiline imports into single lines
+     * This handles imports like:
+     * import {
+     *   foo,
+     *   bar
+     * } from 'module';
+     */
+    private preprocessMultilineImports(code: string, langLower: string): string {
+        // Only preprocess for JS/TS where multiline imports are common
+        if (!['javascript', 'js', 'typescript', 'ts', 'jsx', 'tsx'].includes(langLower)) {
+            return code;
+        }
+
+        // Join multiline imports: match `import {` ... `} from '...'` across lines
+        // This regex handles the common case of destructured imports spanning multiple lines
+        return code.replace(
+            /import\s*\{([^}]*)\}\s*from\s*(['"][^'"]+['"])/gs,
+            (match, imports, source) => {
+                // Normalize whitespace in the import list
+                const normalizedImports = imports.replace(/\s+/g, ' ').trim();
+                return `import { ${normalizedImports} } from ${source}`;
+            }
+        );
     }
 
     /**
@@ -101,8 +134,11 @@ export class ImportAnalyzer {
                 const csImports = this.extractCSharpImports(line, language, filePath, lineNumber);
                 imports.push(...csImports);
             }
-        } catch {
-            // Silently skip lines that fail to parse
+        } catch (error) {
+            // Log at debug level if DEBUG environment variable is set
+            if (process.env.DEBUG) {
+                console.debug(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${error}`);
+            }
         }
 
         return imports;
@@ -321,6 +357,11 @@ export class ImportAnalyzer {
      * @returns ImportGraph with imports and frequency data
      */
     buildImportGraph(): ImportGraph {
+        // Return cached graph if available
+        if (this.cachedGraph !== null) {
+            return this.cachedGraph;
+        }
+
         const frequency: ImportFrequency = {};
 
         for (const importInfo of this.imports) {
@@ -328,29 +369,33 @@ export class ImportAnalyzer {
             frequency[path] = (frequency[path] || 0) + 1;
         }
 
-        return {
+        this.cachedGraph = {
             imports: this.imports,
             frequency
         };
+
+        return this.cachedGraph;
     }
 
     /**
      * Gets the import frequency for a specific file path
+     * Uses cached graph for performance
      * @param filePath The file path to check
      * @returns The import count for the file
      */
     getImportFrequency(filePath: string): number {
-        const graph = this.buildImportGraph();
+        const graph = this.buildImportGraph(); // Uses cache
         return graph.frequency[filePath] || 0;
     }
 
     /**
      * Gets the most frequently imported files
+     * Uses cached graph for performance
      * @param topN Number of top files to return
      * @returns Array of [filePath, count] tuples sorted by frequency
      */
     getMostImported(topN: number = 10): [string, number][] {
-        const graph = this.buildImportGraph();
+        const graph = this.buildImportGraph(); // Uses cache
         const entries = Object.entries(graph.frequency);
 
         return entries
@@ -373,7 +418,58 @@ export class ImportAnalyzer {
      * @returns Array of ImportInfo for files that import this file
      */
     getImportersOfFile(filePath: string): ImportInfo[] {
-        return this.imports.filter(imp => imp.importedPath.includes(filePath) || filePath.includes(imp.importedPath));
+        const normalizedTarget = this.normalizePath(filePath);
+        const targetBasename = this.getBasename(normalizedTarget);
+
+        return this.imports.filter(imp => {
+            const normalizedImport = this.normalizePath(imp.importedPath);
+            const importBasename = this.getBasename(normalizedImport);
+
+            // Exact match after normalization
+            if (normalizedImport === normalizedTarget) {
+                return true;
+            }
+
+            // Match if import path ends with the target (handles relative imports)
+            // e.g., './utils/format' matches 'src/utils/format.ts'
+            if (normalizedTarget.endsWith(normalizedImport) || normalizedImport.endsWith(normalizedTarget)) {
+                // Ensure we're matching at a path boundary (not partial filename)
+                const longer = normalizedTarget.length > normalizedImport.length ? normalizedTarget : normalizedImport;
+                const shorter = normalizedTarget.length > normalizedImport.length ? normalizedImport : normalizedTarget;
+                const idx = longer.lastIndexOf(shorter);
+                if (idx === 0 || longer[idx - 1] === '/') {
+                    return true;
+                }
+            }
+
+            // Match by basename if basenames are identical and non-generic
+            // (avoids matching 'index' to every index.ts file)
+            if (targetBasename === importBasename && targetBasename !== 'index' && targetBasename.length > 3) {
+                return true;
+            }
+
+            return false;
+        });
+    }
+
+    /**
+     * Normalize a path for comparison
+     * Removes leading ./ or ../, trailing extensions, and normalizes separators
+     */
+    private normalizePath(p: string): string {
+        return p
+            .replace(/^\.\.?\//g, '')           // Remove leading ./ or ../
+            .replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/i, '')  // Remove common extensions
+            .replace(/\/index$/i, '')            // Remove trailing /index
+            .replace(/\\/g, '/');                // Normalize separators
+    }
+
+    /**
+     * Get the basename (filename without extension) from a path
+     */
+    private getBasename(p: string): string {
+        const parts = p.split('/');
+        return parts[parts.length - 1] || '';
     }
 
     /**
@@ -381,6 +477,7 @@ export class ImportAnalyzer {
      */
     reset(): void {
         this.imports = [];
+        this.cachedGraph = null;
     }
 
     /**

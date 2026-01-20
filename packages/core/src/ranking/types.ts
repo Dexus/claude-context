@@ -1,17 +1,7 @@
-/**
- * Individual ranking factor scores
- * Each score should be normalized to [0, 1] range
- */
-export interface RankingFactors {
-    /** Vector similarity score from semantic search */
-    vectorScore: number;
-    /** Recency score based on file modification time */
-    recencyScore: number;
-    /** Import frequency score based on how often the file is imported */
-    importScore: number;
-    /** Term frequency score based on query term matches in content */
-    termFreqScore: number;
-}
+// Re-export RankingFactors from core types (to avoid circular dependency)
+export type { RankingFactors } from '../types';
+
+import type { RankingFactors } from '../types';
 
 /**
  * Configuration for the ranking system

@@ -25,6 +25,9 @@ export default tseslint.config(
     },
   },
   {
+    // Note: MCP tests are ignored because they may use mock patterns and dynamic requires
+    // that conflict with strict TypeScript ESLint rules. Core package tests (if added) should
+    // follow the same pattern if they encounter similar issues with test utilities.
     ignores: ['**/dist/', '**/node_modules/', '**/*.js', '**/*.d.ts', 'packages/mcp/src/__tests__/'],
   }
 );

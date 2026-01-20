@@ -344,7 +344,8 @@ export class ABTest {
         const topK = rankedDocIds.slice(0, k);
         const relevantInTopK = topK.filter(docId => relevantDocIds.includes(docId)).length;
 
-        return relevantInTopK / Math.min(k, rankedDocIds.length);
+        // Standard Precision@k divides by k regardless of result count
+        return relevantInTopK / k;
     }
 
     /**
