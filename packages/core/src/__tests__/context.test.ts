@@ -788,6 +788,9 @@ describe('Context', () => {
                 }
             ]);
 
+            // Disable ranking for this test to verify exact mock scores
+            context.updateRankingConfig({ enabled: false });
+
             const results = await context.semanticSearch('/test/path', 'test query');
 
             expect(mockVectorDatabase.hybridSearch).toHaveBeenCalled();
@@ -838,6 +841,9 @@ describe('Context', () => {
                     score: 0.85
                 }
             ]);
+
+            // Disable ranking for this test to verify exact mock scores
+            context.updateRankingConfig({ enabled: false });
 
             const results = await context.semanticSearch('/test/path', 'test function');
 

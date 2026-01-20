@@ -38,7 +38,7 @@ export class Ranker {
                 relativePath: result.document.relativePath,
                 startLine: result.document.startLine,
                 endLine: result.document.endLine,
-                language: result.document.fileExtension,
+                language: result.document.metadata?.language || result.document.fileExtension,
                 score: result.score,
             }));
         }
@@ -69,7 +69,7 @@ export class Ranker {
                 relativePath: result.document.relativePath,
                 startLine: result.document.startLine,
                 endLine: result.document.endLine,
-                language: result.document.fileExtension,
+                language: result.document.metadata?.language || result.document.fileExtension,
                 score: finalScore,
             };
 
