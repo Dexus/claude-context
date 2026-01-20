@@ -444,8 +444,10 @@ export class Context {
      * @param query Search query
      * @param topK Number of results to return
      * @param threshold Similarity threshold
+     * @param filterExpr Optional filter expression for results
+     * @param enableRanking Whether to apply multi-factor ranking (default: true)
      */
-    async semanticSearch(codebasePath: string, query: string, topK: number = 5, threshold: number = 0.5, filterExpr?: string): Promise<SemanticSearchResult[]> {
+    async semanticSearch(codebasePath: string, query: string, topK: number = 5, threshold: number = 0.5, filterExpr?: string, enableRanking: boolean = true): Promise<SemanticSearchResult[]> {
         const isHybrid = this.getIsHybrid();
         const searchType = isHybrid === true ? 'hybrid search' : 'semantic search';
         console.log(`🔍 Executing ${searchType}: "${query}" in ${codebasePath}`);
@@ -511,8 +513,10 @@ export class Context {
 
             console.log(`🔍 Raw search results count: ${searchResults.length}`);
 
-            // 4. Apply ranking to results
-            const rankedResults = this.ranker.rank(searchResults, query);
+            // 4. Apply ranking to results (if enabled)
+            // Use a temporary ranker with enabled flag based on parameter
+            const ranker = enableRanking ? this.ranker : new Ranker({ ...this.rankingConfig, enabled: false });
+            const rankedResults = ranker.rank(searchResults, query);
 
             // 5. Convert to semantic search result format
             const results: SemanticSearchResult[] = rankedResults.map(result => ({
@@ -542,8 +546,10 @@ export class Context {
                 { topK, threshold, filterExpr }
             );
 
-            // 3. Apply ranking to results
-            const rankedResults = this.ranker.rank(searchResults, query);
+            // 3. Apply ranking to results (if enabled)
+            // Use a temporary ranker with enabled flag based on parameter
+            const ranker = enableRanking ? this.ranker : new Ranker({ ...this.rankingConfig, enabled: false });
+            const rankedResults = ranker.rank(searchResults, query);
 
             // 4. Convert to semantic search result format
             const results: SemanticSearchResult[] = rankedResults.map(result => ({
