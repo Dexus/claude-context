@@ -191,6 +191,44 @@ Use **search_code** for simple, direct queries with known terminology:
 - Maximum iterations are clamped between 1-10 to prevent infinite loops
 `;
 
+        const get_watching_status_description = `
+Get the current file watching status of an indexed codebase.
+
+⚠️ **IMPORTANT**:
+- You MUST provide an absolute path.
+- File watching must be enabled in the MCP server configuration (ENABLE_FILE_WATCHER=true).
+
+🎯 **When to Use**:
+- **Check watcher status**: Verify if a codebase is being watched for file changes
+- **View statistics**: See how many files are being watched and how many change events have been detected
+- **Troubleshooting**: Diagnose why auto-reindexing may not be working
+
+✨ **Usage Guidance**:
+- This tool only works for indexed codebases
+- Returns detailed statistics including watched file count, events processed, and watcher start time
+- If file watching is disabled, this tool will return a message explaining how to enable it
+`;
+
+        const start_watching_description = `
+Start watching an indexed codebase for file changes and enable automatic re-indexing.
+
+⚠️ **IMPORTANT**:
+- You MUST provide an absolute path.
+- File watching must be enabled in the MCP server configuration (ENABLE_FILE_WATCHER=true).
+- The codebase must be indexed first.
+
+🎯 **When to Use**:
+- **Enable auto-reindexing**: Automatically re-index when files change
+- **Active development**: Keep the index up-to-date during coding sessions
+- **Manual control**: Start watching when you need it, stop when you don't
+
+✨ **Usage Guidance**:
+- File changes are debounced (default 2000ms) to batch rapid edits
+- Only changed files are re-indexed (incremental, not full rebuild)
+- Re-indexing runs in background without blocking searches
+- If already watching, you must stop first using stop_watching
+`;
+
         // Define available tools
         this.server.setRequestHandler(ListToolsRequestSchema, async () => {
             return {
@@ -341,6 +379,48 @@ Use **search_code** for simple, direct queries with known terminology:
                             required: ["path"]
                         }
                     },
+                    {
+                        name: "get_watching_status",
+                        description: get_watching_status_description,
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                path: {
+                                    type: "string",
+                                    description: `ABSOLUTE path to the codebase directory to check watching status for.`
+                                }
+                            },
+                            required: ["path"]
+                        }
+                    },
+                    {
+                        name: "start_watching",
+                        description: start_watching_description,
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                path: {
+                                    type: "string",
+                                    description: `ABSOLUTE path to the indexed codebase directory to start watching.`
+                                },
+                                debounceMs: {
+                                    type: "number",
+                                    description: "Optional debounce delay in milliseconds to batch rapid file changes. Default: 2000",
+                                    default: 2000
+                                }
+                            },
+                            required: ["path"]
+                        }
+                    },
+                    {
+                        name: "stop_watching",
+                        description: `Stop watching for file changes. Disables automatic re-indexing for the currently watched codebase.`,
+                        inputSchema: {
+                            type: "object",
+                            properties: {},
+                            required: []
+                        }
+                    },
                 ]
             };
         });
@@ -360,6 +440,12 @@ Use **search_code** for simple, direct queries with known terminology:
                     return await this.toolHandlers.handleClearIndex(args);
                 case "get_indexing_status":
                     return await this.toolHandlers.handleGetIndexingStatus(args);
+                case "get_watching_status":
+                    return await this.toolHandlers.handleGetWatchingStatus(args);
+                case "start_watching":
+                    return await this.toolHandlers.handleStartWatching(args);
+                case "stop_watching":
+                    return await this.toolHandlers.handleStopWatching(args);
 
                 default:
                     throw new Error(`Unknown tool: ${name}`);
