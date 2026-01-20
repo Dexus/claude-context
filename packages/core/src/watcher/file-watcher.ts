@@ -12,7 +12,13 @@ import {
 
 export class ChokidarFileWatcher implements FileWatcher {
     private watcher: chokidar.FSWatcher | null;
-    private options: Required<WatcherOptions>;
+    private options: Omit<WatcherOptions, 'debounceMs' | 'recursive' | 'ignoreInitial' | 'watchFile' | 'watchDirectory'> & {
+        debounceMs: number;
+        recursive: boolean;
+        ignoreInitial: boolean;
+        watchFile: boolean;
+        watchDirectory: boolean;
+    };
     private changeCallback: FileChangeCallback | null;
     private errorCallback: ErrorCallback | null;
     private debounceTimer: NodeJS.Timeout | null;
@@ -65,15 +71,21 @@ export class ChokidarFileWatcher implements FileWatcher {
             const watchPaths = this.normalizePaths(this.options.paths);
 
             // Create chokidar watcher
-            this.watcher = chokidar.watch(watchPaths, {
-                ignored: this.options.ignored,
+            const chokidarOptions: chokidar.WatchOptions = {
                 persistent: true,
                 ignoreInitial: this.options.ignoreInitial,
                 awaitWriteFinish: {
                     stabilityThreshold: 200,
                     pollInterval: 100
                 }
-            });
+            };
+
+            // Only add ignored option if it's defined (chokidar doesn't accept undefined)
+            if (this.options.ignored !== undefined) {
+                chokidarOptions.ignored = this.options.ignored;
+            }
+
+            this.watcher = chokidar.watch(watchPaths, chokidarOptions);
 
             // Set up event handlers
             this.watcher.on('add', (filePath) => this.handleChange('add', filePath));
@@ -243,9 +255,17 @@ export class ChokidarFileWatcher implements FileWatcher {
     private handleReady(): void {
         try {
             if (this.watcher) {
-                this.stats.watchedFiles = this.watcher.getWatched().size;
+                const watched = this.watcher.getWatched();
+                // Count total files across all directories
+                let totalFiles = 0;
+                for (const dir in watched) {
+                    if (Array.isArray(watched[dir])) {
+                        totalFiles += watched[dir].length;
+                    }
+                }
+                this.stats.watchedFiles = totalFiles;
             }
-            console.log(`File watcher ready. Watching ${this.stats.watchedFiles} directories.`);
+            console.log(`File watcher ready. Watching ${this.stats.watchedFiles} files.`);
         } catch (error: any) {
             console.warn(`Failed to get watched files count: ${error.message}`);
         }
