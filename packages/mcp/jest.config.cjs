@@ -1,3 +1,5 @@
+// Using .cjs extension because this package has "type": "module" in package.json,
+// which requires CommonJS config files to use the .cjs extension.
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'ts-jest',

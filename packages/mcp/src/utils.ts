@@ -55,3 +55,29 @@ export function buildExtensionFilterExpression(extensionFilter?: any[]): { filte
         filterExpr: `fileExtension in [${quoted}]`
     };
 }
+
+/**
+ * Format a search result for display.
+ * @param result The search result object
+ * @param index The result index (0-based)
+ * @param absolutePath The codebase absolute path
+ * @param showScore If true, show score; if false, show rank
+ */
+export function formatSearchResult(
+    result: { relativePath: string; startLine: number; endLine: number; content: string; language: string; score?: number },
+    index: number,
+    absolutePath: string,
+    showScore: boolean = false
+): string {
+    const location = `${result.relativePath}:${result.startLine}-${result.endLine}`;
+    const context = truncateContent(result.content, 5000);
+    const codebaseInfo = path.basename(absolutePath);
+    const rankOrScore = showScore && result.score !== undefined
+        ? `Score: ${result.score.toFixed(3)}`
+        : `Rank: ${index + 1}`;
+
+    return `${index + 1}. Code snippet (${result.language}) [${codebaseInfo}]\n` +
+        `   Location: ${location}\n` +
+        `   ${rankOrScore}\n` +
+        `   Context: \n\`\`\`${result.language}\n${context}\n\`\`\`\n`;
+}

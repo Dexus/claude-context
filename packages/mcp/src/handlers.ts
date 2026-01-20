@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Context, COLLECTION_LIMIT_MESSAGE } from "@dannyboy2042/claude-context-core";
 import { SnapshotManager } from "./snapshot.js";
-import { ensureAbsolutePath, truncateContent, trackCodebasePath, buildExtensionFilterExpression } from "./utils.js";
+import { ensureAbsolutePath, truncateContent, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
 
 export class ToolHandlers {
@@ -16,6 +16,34 @@ export class ToolHandlers {
         this.snapshotManager = snapshotManager;
         this.currentWorkspace = process.cwd();
         console.log(`[WORKSPACE] Current workspace: ${this.currentWorkspace}`);
+    }
+
+    /**
+     * Helper to handle collection limit errors consistently across handlers.
+     * Returns a response object if the error is a collection limit error, null otherwise.
+     * @param error The error to check
+     * @param asError If true, sets isError: true in the response (used for indexing errors)
+     */
+    private handleCollectionLimitError(
+        error: unknown,
+        asError: boolean = false
+    ): { content: { type: string; text: string }[]; isError?: boolean } | null {
+        const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
+
+        if (errorMessage === COLLECTION_LIMIT_MESSAGE || errorMessage.includes(COLLECTION_LIMIT_MESSAGE)) {
+            const response: { content: { type: string; text: string }[]; isError?: boolean } = {
+                content: [{
+                    type: "text",
+                    text: COLLECTION_LIMIT_MESSAGE
+                }]
+            };
+            if (asError) {
+                response.isError = true;
+            }
+            return response;
+        }
+
+        return null;
     }
 
     /**
@@ -332,31 +360,22 @@ export class ToolHandlers {
                 }
                 console.log(`[INDEX-VALIDATION] ✅  Collection creation validation completed`);
             } catch (validationError: any) {
-                const errorMessage = typeof validationError === 'string' ? validationError :
-                    (validationError instanceof Error ? validationError.message : String(validationError));
-
-                if (errorMessage === COLLECTION_LIMIT_MESSAGE || errorMessage.includes(COLLECTION_LIMIT_MESSAGE)) {
+                // Check for collection limit error
+                const collectionLimitResponse = this.handleCollectionLimitError(validationError, true);
+                if (collectionLimitResponse) {
                     console.error(`[INDEX-VALIDATION] ❌ Collection limit validation failed: ${absolutePath}`);
-
-                    // CRITICAL: Immediately return the COLLECTION_LIMIT_MESSAGE to MCP client
-                    return {
-                        content: [{
-                            type: "text",
-                            text: COLLECTION_LIMIT_MESSAGE
-                        }],
-                        isError: true
-                    };
-                } else {
-                    // Handle other collection creation errors
-                    console.error(`[INDEX-VALIDATION] ❌ Collection creation validation failed:`, validationError);
-                    return {
-                        content: [{
-                            type: "text",
-                            text: `Error validating collection creation: ${validationError.message || validationError}`
-                        }],
-                        isError: true
-                    };
+                    return collectionLimitResponse;
                 }
+
+                // Handle other collection creation errors
+                console.error(`[INDEX-VALIDATION] ❌ Collection creation validation failed:`, validationError);
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error validating collection creation: ${validationError.message || validationError}`
+                    }],
+                    isError: true
+                };
             }
 
             // Add custom extensions if provided
@@ -546,17 +565,10 @@ export class ToolHandlers {
                 };
             }
 
-            // Format results
-            const formattedResults = searchResults.map((result: any, index: number) => {
-                const location = `${result.relativePath}:${result.startLine}-${result.endLine}`;
-                const context = truncateContent(result.content, 5000);
-                const codebaseInfo = path.basename(absolutePath);
-
-                return `${index + 1}. Code snippet (${result.language}) [${codebaseInfo}]\n` +
-                    `   Location: ${location}\n` +
-                    `   Rank: ${index + 1}\n` +
-                    `   Context: \n\`\`\`${result.language}\n${context}\n\`\`\`\n`;
-            }).join('\n');
+            // Format results using shared utility
+            const formattedResults = searchResults.map((result: any, index: number) =>
+                formatSearchResult(result, index, absolutePath, false)
+            ).join('\n');
 
             let resultMessage = `Found ${searchResults.length} results for query: "${query}" in codebase '${absolutePath}'${indexingStatusMessage}\n\n${formattedResults}`;
 
@@ -571,21 +583,13 @@ export class ToolHandlers {
                 }]
             };
         } catch (error) {
-            // Check if this is the collection limit error
-            // Handle both direct string throws and Error objects containing the message
-            const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
-
-            if (errorMessage === COLLECTION_LIMIT_MESSAGE || errorMessage.includes(COLLECTION_LIMIT_MESSAGE)) {
-                // Return the collection limit message as a successful response
-                // This ensures LLM treats it as final answer, not as retryable error
-                return {
-                    content: [{
-                        type: "text",
-                        text: COLLECTION_LIMIT_MESSAGE
-                    }]
-                };
+            // Check for collection limit error (returned as successful response so LLM doesn't retry)
+            const collectionLimitResponse = this.handleCollectionLimitError(error);
+            if (collectionLimitResponse) {
+                return collectionLimitResponse;
             }
 
+            const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
             return {
                 content: [{
                     type: "text",
@@ -661,17 +665,10 @@ export class ToolHandlers {
                 };
             }
 
-            // Format results
-            const formattedResults = result.combinedResults.map((searchResult: any, index: number) => {
-                const location = `${searchResult.relativePath}:${searchResult.startLine}-${searchResult.endLine}`;
-                const context = truncateContent(searchResult.content, 5000);
-                const codebaseInfo = path.basename(absolutePath);
-
-                return `${index + 1}. Code snippet (${searchResult.language}) [${codebaseInfo}]\n` +
-                    `   Location: ${location}\n` +
-                    `   Score: ${searchResult.score.toFixed(3)}\n` +
-                    `   Context: \n\`\`\`${searchResult.language}\n${context}\n\`\`\`\n`;
-            }).join('\n');
+            // Format results using shared utility (show score for agent search)
+            const formattedResults = result.combinedResults.map((searchResult: any, index: number) =>
+                formatSearchResult(searchResult, index, absolutePath, true)
+            ).join('\n');
 
             let resultMessage = `${result.summary}${indexingStatusMessage}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nFound ${result.combinedResults.length} unique results:\n\n${formattedResults}`;
 
@@ -686,21 +683,13 @@ export class ToolHandlers {
                 }]
             };
         } catch (error) {
-            // Check if this is the collection limit error
-            // Handle both direct string throws and Error objects containing the message
-            const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
-
-            if (errorMessage === COLLECTION_LIMIT_MESSAGE || errorMessage.includes(COLLECTION_LIMIT_MESSAGE)) {
-                // Return the collection limit message as a successful response
-                // This ensures LLM treats it as final answer, not as retryable error
-                return {
-                    content: [{
-                        type: "text",
-                        text: COLLECTION_LIMIT_MESSAGE
-                    }]
-                };
+            // Check for collection limit error (returned as successful response so LLM doesn't retry)
+            const collectionLimitResponse = this.handleCollectionLimitError(error);
+            if (collectionLimitResponse) {
+                return collectionLimitResponse;
             }
 
+            const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
             return {
                 content: [{
                     type: "text",
@@ -807,21 +796,13 @@ export class ToolHandlers {
                 }]
             };
         } catch (error) {
-            // Check if this is the collection limit error
-            // Handle both direct string throws and Error objects containing the message
-            const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
-
-            if (errorMessage === COLLECTION_LIMIT_MESSAGE || errorMessage.includes(COLLECTION_LIMIT_MESSAGE)) {
-                // Return the collection limit message as a successful response
-                // This ensures LLM treats it as final answer, not as retryable error
-                return {
-                    content: [{
-                        type: "text",
-                        text: COLLECTION_LIMIT_MESSAGE
-                    }]
-                };
+            // Check for collection limit error (returned as successful response so LLM doesn't retry)
+            const collectionLimitResponse = this.handleCollectionLimitError(error);
+            if (collectionLimitResponse) {
+                return collectionLimitResponse;
             }
 
+            const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
             return {
                 content: [{
                     type: "text",
