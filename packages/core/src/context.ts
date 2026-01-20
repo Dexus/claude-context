@@ -23,6 +23,7 @@ import * as crypto from 'crypto';
 import { FileSynchronizer } from './sync/synchronizer';
 import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
 import { RankingConfig, DEFAULT_RANKING_CONFIG } from './ranking/types';
+import { Ranker } from './ranking/ranker';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
@@ -113,6 +114,7 @@ export class Context {
     private importAnalyzer: ImportAnalyzer;
     private importFrequencyMap: ImportFrequency;
     private rankingConfig: RankingConfig;
+    private ranker: Ranker;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -135,6 +137,9 @@ export class Context {
 
         // Initialize ranking configuration
         this.rankingConfig = config.rankingConfig || { ...DEFAULT_RANKING_CONFIG };
+
+        // Initialize ranker with configuration
+        this.ranker = new Ranker(this.rankingConfig);
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -233,6 +238,7 @@ export class Context {
      */
     updateRankingConfig(rankingConfig: Partial<RankingConfig>): void {
         this.rankingConfig = { ...this.rankingConfig, ...rankingConfig };
+        this.ranker.updateConfig(rankingConfig);
         console.log(`🔄 Updated ranking configuration`);
     }
 
@@ -505,13 +511,16 @@ export class Context {
 
             console.log(`🔍 Raw search results count: ${searchResults.length}`);
 
-            // 4. Convert to semantic search result format
-            const results: SemanticSearchResult[] = searchResults.map(result => ({
-                content: result.document.content,
-                relativePath: result.document.relativePath,
-                startLine: result.document.startLine,
-                endLine: result.document.endLine,
-                language: result.document.metadata.language || 'unknown',
+            // 4. Apply ranking to results
+            const rankedResults = this.ranker.rank(searchResults, query);
+
+            // 5. Convert to semantic search result format
+            const results: SemanticSearchResult[] = rankedResults.map(result => ({
+                content: result.content,
+                relativePath: result.relativePath,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                language: result.language,
                 score: result.score
             }));
 
@@ -533,13 +542,16 @@ export class Context {
                 { topK, threshold, filterExpr }
             );
 
-            // 3. Convert to semantic search result format
-            const results: SemanticSearchResult[] = searchResults.map(result => ({
-                content: result.document.content,
-                relativePath: result.document.relativePath,
-                startLine: result.document.startLine,
-                endLine: result.document.endLine,
-                language: result.document.metadata.language || 'unknown',
+            // 3. Apply ranking to results
+            const rankedResults = this.ranker.rank(searchResults, query);
+
+            // 4. Convert to semantic search result format
+            const results: SemanticSearchResult[] = rankedResults.map(result => ({
+                content: result.content,
+                relativePath: result.relativePath,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                language: result.language,
                 score: result.score
             }));
 
