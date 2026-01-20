@@ -1475,7 +1475,7 @@ export class Context {
                 this.fileWatcher.onChange(onChangeCallback);
             } else {
                 // Default callback: reindex changed files
-                this.fileWatcher.onChange(async (changedFiles: Set<string>, events: FileChangeEvent[]) => {
+                this.fileWatcher.onChange(async (changedFiles: Set<string>, _events: FileChangeEvent[]) => {
                     console.log(`📝 Detected ${changedFiles.size} file changes`);
                     changedFiles.forEach(file => {
                         console.log(`  - ${file}`);

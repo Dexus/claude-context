@@ -1124,7 +1124,7 @@ export class ToolHandlers {
         }
     }
 
-    public async handleStopWatching(args: any) {
+    public async handleStopWatching(_args: unknown) {
         try {
             // Check if file watching is enabled in config
             if (!this.config.enableFileWatcher) {

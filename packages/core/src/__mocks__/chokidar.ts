@@ -17,7 +17,7 @@ const createMockFSWatcher = () => {
     return watcher;
 };
 
-export const watch = jest.fn((paths: string | string[], options?: any) => {
+export const watch = jest.fn((paths: string | string[], _options?: unknown) => {
     const watcher = createMockFSWatcher();
     const pathStr = Array.isArray(paths) ? paths[0] : paths;
     watcher.watchedPaths = {

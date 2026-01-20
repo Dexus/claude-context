@@ -1,20 +1,16 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import * as path from 'path';
 import * as os from 'os';
 import { ChokidarFileWatcher } from '../../watcher/file-watcher';
 import {
     FileChangeEvent,
-    FileChangeType,
-    WatcherOptions,
-    WatcherStats
+    WatcherOptions
 } from '../../watcher/types';
 
 // Use manual mock for chokidar
 jest.mock('chokidar', () => {
     return jest.createMockFromModule('chokidar');
 });
-
-// Get a reference to the mocked module to configure it in tests
-import * as chokidar from 'chokidar';
 
 describe('ChokidarFileWatcher', () => {
     let tempDir: string;
@@ -175,9 +171,7 @@ describe('ChokidarFileWatcher', () => {
             await watcher.start();
 
             const chokidar = require('chokidar');
-            const watchMock = chokidar.watch as jest.Mock;
-            const instance = watchMock.mock.results[watchMock.mock.results.length - 1]?.value;
-            const watchedPath = (require('chokidar').watch as jest.Mock).mock.calls[0][0];
+            const watchedPath = (chokidar.watch as jest.Mock).mock.calls[0][0];
             expect(path.isAbsolute(watchedPath)).toBe(true);
 
             await watcher.stop();
@@ -268,7 +262,6 @@ describe('ChokidarFileWatcher', () => {
             await watcher.start();
             await watcher.stop();
 
-            const stats = watcher.getStats();
             // Watcher should be stopped
             expect(watcher.isWatching()).toBe(false);
         });
