@@ -205,9 +205,9 @@ describe('MerkleDAG', () => {
 
         it('should return all nodes when all are roots', () => {
             const dag = new MerkleDAG();
-            const id1 = dag.addNode('data1');
-            const id2 = dag.addNode('data2');
-            const id3 = dag.addNode('data3');
+            dag.addNode('data1');
+            dag.addNode('data2');
+            dag.addNode('data3');
 
             const rootNodes = dag.getRootNodes();
             expect(rootNodes).toHaveLength(3);
@@ -248,9 +248,9 @@ describe('MerkleDAG', () => {
 
         it('should return all nodes when all are leaves (no children)', () => {
             const dag = new MerkleDAG();
-            const id1 = dag.addNode('data1');
-            const id2 = dag.addNode('data2');
-            const id3 = dag.addNode('data3');
+            dag.addNode('data1');
+            dag.addNode('data2');
+            dag.addNode('data3');
 
             const leafNodes = dag.getLeafNodes();
             expect(leafNodes).toHaveLength(3);
@@ -295,7 +295,7 @@ describe('MerkleDAG', () => {
         it('should serialize DAG with nodes', () => {
             const dag = new MerkleDAG();
             const rootId = dag.addNode('root');
-            const childId = dag.addNode('child', rootId);
+            dag.addNode('child', rootId);
 
             const serialized = dag.serialize();
 
@@ -342,7 +342,7 @@ describe('MerkleDAG', () => {
         it('should deserialize DAG with nodes', () => {
             const originalDag = new MerkleDAG();
             const rootId = originalDag.addNode('root');
-            const childId = originalDag.addNode('child', rootId);
+            originalDag.addNode('child', rootId);
             const serialized = originalDag.serialize();
 
             const restoredDag = MerkleDAG.deserialize(serialized);
@@ -389,7 +389,7 @@ describe('MerkleDAG', () => {
         it('should preserve DAG structure through roundtrip', () => {
             const originalDag = new MerkleDAG();
             const root1Id = originalDag.addNode('root1');
-            const root2Id = originalDag.addNode('root2');
+            originalDag.addNode('root2');
             const child1Id = originalDag.addNode('child1', root1Id);
             const child2Id = originalDag.addNode('child2', root1Id);
             const grandchildId = originalDag.addNode('grandchild', child1Id);

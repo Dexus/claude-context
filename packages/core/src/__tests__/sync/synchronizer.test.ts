@@ -1,4 +1,3 @@
-import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -67,7 +66,7 @@ describe('FileSynchronizer', () => {
                 [tempDir]: {},
             });
 
-            const synchronizer = new FileSynchronizer(tempDir);
+            new FileSynchronizer(tempDir);
             // Snapshot path is computed based on MD5 hash of the resolved path
             const expectedSnapshotPath = computeSnapshotPath(tempDir);
             expect(expectedSnapshotPath).toContain('.context/merkle');

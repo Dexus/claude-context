@@ -1,15 +1,9 @@
 import {
     VectorDatabase,
-    VectorDocument,
-    VectorSearchResult,
-    HybridSearchRequest,
-    HybridSearchOptions,
-    HybridSearchResult
+    HybridSearchOptions
 } from '../vectordb/types';
 import { Splitter, CodeChunk } from '../splitter';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
 // Mock langchain-splitter before any imports that use it
 jest.mock('../splitter/langchain-splitter', () => ({
@@ -95,8 +89,8 @@ jest.mock('../sync/synchronizer', () => {
 });
 
 // Import Context after all mocks are set up
-import { Context, ContextConfig } from '../context';
-import { Embedding, EmbeddingVector } from '../embedding/base-embedding';
+import { Context } from '../context';
+import { Embedding } from '../embedding/base-embedding';
 import { FileSynchronizer } from '../sync/synchronizer';
 
 // Helper to create a mock Embedding instance

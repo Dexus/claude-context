@@ -644,7 +644,6 @@ describe('LangChainCodeSplitter', () => {
 
     describe('fallback line estimation', () => {
         it('should estimate lines correctly when chunk is found in original', async () => {
-            const { RecursiveCharacterTextSplitter } = jest.requireMock('langchain/text_splitter');
             const splitter = new LangChainCodeSplitter();
             const code = `line1\nline2\nline3\nline4\nline5`;
 

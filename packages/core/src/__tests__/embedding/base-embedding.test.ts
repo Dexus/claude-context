@@ -5,7 +5,7 @@ import { Embedding, EmbeddingVector } from '../../embedding/base-embedding';
  * Exposes protected methods for testing
  */
 class TestableEmbedding extends Embedding {
-    protected maxTokens: number = 8191;
+    protected maxTokens: number;
 
     constructor(maxTokens: number = 8191) {
         super();
