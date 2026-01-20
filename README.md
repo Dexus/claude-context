@@ -365,10 +365,12 @@ For more detailed MCP environment variable configuration, see our [Environment V
 ### 🔧 Key Features
 
 - 🔍 **Hybrid Search**: Advanced hybrid search combining vector similarity + full-text search using RRF (Reciprocal Rank Fusion) for better results
+- 🤖 **Agent-Based Interactive Search**: AI-powered search refinement that engages in multi-turn conversations to understand your intent and deliver precisely relevant results
+- 📊 **Smart Result Ranking**: Intelligent ranking algorithm that optimizes search results based on semantic relevance, code context, and query patterns
 - 🏠 **100% Local**: Everything runs locally using LanceDB - your code never leaves your machine
 - ⚡ **Fast & Incremental**: Smart indexing that only processes changed files
 - 🧩 **AST-Powered**: Intelligent code chunking using Abstract Syntax Trees for better context
-- 🗄️ **No Limits**: Handle codebases of any size locally 
+- 🗄️ **No Limits**: Handle codebases of any size locally
 - 🛠️ **Zero Config**: Works out of the box - just add your OpenAI API key
 
 ### Core Components
@@ -534,9 +536,9 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 - [x] AST-based code analysis for improved understanding
 - [x] Support for additional embedding providers
-- [ ] Agent-based interactive search mode
+- [x] Agent-based interactive search mode
 - [x] Enhanced code chunking strategies
-- [ ] Search result ranking optimization
+- [x] Search result ranking optimization
 
 ---
 
