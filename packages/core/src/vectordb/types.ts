@@ -1,4 +1,22 @@
 // Interface definitions
+
+/**
+ * Metadata stored with each document chunk
+ * Includes ranking-related fields and extensible for custom data
+ */
+export interface DocumentMetadata {
+    /** Import frequency count for ranking (how many files import this file) */
+    importCount?: number;
+    /** Programming language of the file */
+    language?: string;
+    /** Codebase root path */
+    codebasePath?: string;
+    /** Index of this chunk within the file */
+    chunkIndex?: number;
+    /** Additional custom metadata */
+    [key: string]: unknown;
+}
+
 export interface VectorDocument {
     id: string;
     vector: number[];
@@ -8,7 +26,7 @@ export interface VectorDocument {
     endLine: number;
     fileExtension: string;
     mtime: number;
-    metadata: Record<string, any>;
+    metadata: DocumentMetadata;
 }
 
 export interface SearchOptions {

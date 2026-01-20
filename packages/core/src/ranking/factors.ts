@@ -95,7 +95,8 @@ export function calculateTermFrequencyScore(content: string, queryTerms: string[
 
     // Normalize by content length (in words)
     // This prevents longer documents from having artificially high scores
-    const words = content.split(/\s+/).length;
+    // Filter empty strings to handle whitespace-only content correctly
+    const words = content.split(/\s+/).filter(w => w.length > 0).length;
     const normalizedScore = totalMatches / Math.max(1, words);
 
     // Apply exponential saturation function to map to [0, 1] range

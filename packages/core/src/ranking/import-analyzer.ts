@@ -158,11 +158,22 @@ export class ImportAnalyzer {
     private extractJavaScriptImports(line: string, language: string, filePath: string, lineNumber: number): ImportInfo[] {
         const imports: ImportInfo[] = [];
 
-        // ES6 import: import foo from 'module'
-        const es6ImportMatch = line.match(/import\s+(?:(?:\*\s+as\s+\w+)|(?:\{[^}]*\})|(?:\w+))\s+from\s+['"]([^'"]+)['"]/);
+        // ES6 import: import foo from 'module' (also handles 'import type')
+        const es6ImportMatch = line.match(/import\s+(?:type\s+)?(?:(?:\*\s+as\s+\w+)|(?:\{[^}]*\})|(?:\w+))\s+from\s+['"]([^'"]+)['"]/);
         if (es6ImportMatch) {
             imports.push({
                 importedPath: es6ImportMatch[1],
+                importerPath: filePath,
+                language,
+                lineNumber
+            });
+        }
+
+        // Re-exports: export { foo } from 'module' or export * from 'module'
+        const reExportMatch = line.match(/export\s+(?:(?:\*)|(?:\{[^}]*\}))\s+from\s+['"]([^'"]+)['"]/);
+        if (reExportMatch) {
+            imports.push({
+                importedPath: reExportMatch[1],
                 importerPath: filePath,
                 language,
                 lineNumber
@@ -274,15 +285,23 @@ export class ImportAnalyzer {
         }
 
         // Inside import block: "package" or alias "package"
-        const blockImportMatch = line.match(/^\s*(?:\w+\s+)?"([^"]+)"/);
+        // Be restrictive: only match lines that contain ONLY the import pattern
+        // (optional alias followed by quoted path, nothing else except whitespace and comments)
+        // This prevents matching var declarations like `var config = "database"`
+        const blockImportMatch = line.match(/^\s*(?:(\w+)\s+)?"([^"]+)"\s*(?:\/\/.*)?$/);
         if (blockImportMatch && !singleImportMatch) {
-            // This might be inside an import block
-            imports.push({
-                importedPath: blockImportMatch[1],
-                importerPath: filePath,
-                language,
-                lineNumber
-            });
+            // Additional validation: if there's an alias, it should be a valid Go identifier
+            // (not keywords like var, const, func, etc.)
+            const alias = blockImportMatch[1];
+            const goKeywords = ['var', 'const', 'func', 'type', 'struct', 'interface', 'map', 'chan', 'go', 'defer', 'return', 'if', 'else', 'for', 'switch', 'case', 'default', 'select', 'break', 'continue', 'fallthrough', 'goto', 'package', 'import', 'range'];
+            if (!alias || !goKeywords.includes(alias)) {
+                imports.push({
+                    importedPath: blockImportMatch[2],
+                    importerPath: filePath,
+                    language,
+                    lineNumber
+                });
+            }
         }
 
         return imports;
@@ -450,10 +469,23 @@ export class ImportAnalyzer {
                 }
             }
 
-            // Match by basename if basenames are identical and non-generic
-            // (avoids matching 'index' to every index.ts file)
-            if (targetBasename === importBasename && targetBasename !== 'index' && targetBasename.length > 3) {
-                return true;
+            // Match by basename only if:
+            // 1. Basenames are identical
+            // 2. Not a generic name like 'index'
+            // 3. Either: basename is very unique (>8 chars) OR there's partial directory overlap
+            // This prevents false positives like 'auth' matching unrelated auth.ts files
+            if (targetBasename === importBasename && targetBasename !== 'index') {
+                // Very long basenames are likely unique enough
+                if (targetBasename.length > 8) {
+                    return true;
+                }
+                // For shorter basenames, require at least one common directory segment
+                const targetDirs = normalizedTarget.split('/').slice(0, -1);
+                const importDirs = normalizedImport.split('/').slice(0, -1);
+                const hasCommonDir = targetDirs.some(dir => dir.length > 0 && importDirs.includes(dir));
+                if (hasCommonDir) {
+                    return true;
+                }
             }
 
             return false;
@@ -466,7 +498,7 @@ export class ImportAnalyzer {
      */
     private normalizePath(p: string): string {
         return p
-            .replace(/^\.\.?\//g, '')           // Remove leading ./ or ../
+            .replace(/^(\.\.?\/)+/, '')          // Remove ALL leading ./ or ../ segments
             .replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/i, '')  // Remove common extensions
             .replace(/\/index$/i, '')            // Remove trailing /index
             .replace(/\\/g, '/');                // Normalize separators
