@@ -3,18 +3,25 @@ import { Context, COLLECTION_LIMIT_MESSAGE } from "@dexus1985/claude-context-cor
 import { SnapshotManager } from "./snapshot.js";
 import { ensureAbsolutePath, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
+import { ContextMcpConfig } from "./config.js";
 
 export class ToolHandlers {
     private context: Context;
     private snapshotManager: SnapshotManager;
     private indexingStats: { indexedFiles: number; totalChunks: number } | null = null;
     private currentWorkspace: string;
+    private config: ContextMcpConfig;
 
-    constructor(context: Context, snapshotManager: SnapshotManager) {
+    constructor(context: Context, snapshotManager: SnapshotManager, config: ContextMcpConfig) {
         this.context = context;
         this.snapshotManager = snapshotManager;
+        this.config = config;
         this.currentWorkspace = process.cwd();
         console.log(`[WORKSPACE] Current workspace: ${this.currentWorkspace}`);
+        console.log(`[WORKSPACE] File watching enabled: ${this.config.enableFileWatcher}`);
+        if (this.config.enableFileWatcher) {
+            console.log(`[WORKSPACE] File watch debounce: ${this.config.fileWatchDebounceMs}ms`);
+        }
     }
 
     /**
@@ -499,6 +506,24 @@ export class ToolHandlers {
 
             // Save snapshot after updating codebase lists
             this.snapshotManager.saveCodebaseSnapshot();
+
+            // Start file watcher if enabled in configuration
+            if (this.config.enableFileWatcher) {
+                try {
+                    console.log(`[BACKGROUND-INDEX] 👀 Starting file watcher for indexed codebase: ${absolutePath}`);
+                    await this.context.startWatching(
+                        absolutePath,
+                        undefined, // Use default callback (auto reindex)
+                        this.config.fileWatchDebounceMs || 1000
+                    );
+                    console.log(`[BACKGROUND-INDEX] ✅ File watcher started successfully for: ${absolutePath}`);
+                } catch (watcherError: any) {
+                    console.error(`[BACKGROUND-INDEX] ⚠️  Failed to start file watcher for ${absolutePath}:`, watcherError.message || watcherError);
+                    // Don't fail indexing if file watcher fails to start
+                }
+            } else {
+                console.log(`[BACKGROUND-INDEX] ℹ️  File watching is disabled, skipping file watcher start for: ${absolutePath}`);
+            }
 
             let message = `Background indexing completed for '${absolutePath}' using ${splitterType.toUpperCase()} splitter.\nIndexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks.`;
             if (stats.status === 'limit_reached') {
