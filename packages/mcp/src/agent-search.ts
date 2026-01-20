@@ -289,78 +289,322 @@ export class AgentSearch {
 
     /**
      * Determine if we should refine the search based on current results
-     * This is a placeholder that will be enhanced in subtask-1-3
+     * Uses heuristics like result count, score quality, and diversity
      */
     private shouldRefineSearch(results: SemanticSearchResult[]): boolean {
-        // Simple heuristic for now: continue if we have results but not too many
-        // Will be enhanced with more sophisticated logic in subtask-1-3
+        // No results - try refining to broaden search
         if (results.length === 0) {
-            console.log(`[AGENT-SEARCH] 🛑 No results found, stopping refinement`);
-            return false;
+            if (this.currentIteration === 1) {
+                console.log(`[AGENT-SEARCH] 🔄 No results found, will try refined query`);
+                return true;
+            } else {
+                console.log(`[AGENT-SEARCH] 🛑 No results found after refinement, stopping`);
+                return false;
+            }
         }
 
+        // Too many results with high scores - we found what we need
         if (results.length >= 10) {
-            console.log(`[AGENT-SEARCH] 🛑 Sufficient results found (${results.length}), stopping refinement`);
+            const highScoreCount = results.filter(r => r.score > 0.8).length;
+            if (highScoreCount >= 5) {
+                console.log(`[AGENT-SEARCH] 🛑 Found ${highScoreCount} high-quality results, stopping refinement`);
+                return false;
+            }
+        }
+
+        // Very few results - might benefit from refinement
+        if (results.length < 3 && this.currentIteration === 1) {
+            console.log(`[AGENT-SEARCH] 🔄 Only ${results.length} results, will try refinement`);
+            return true;
+        }
+
+        // Check result diversity - if all results are from same file, try to diversify
+        if (results.length > 0 && this.currentIteration === 1) {
+            const uniqueFiles = new Set(results.map(r => r.relativePath));
+            if (uniqueFiles.size === 1 && results.length < 5) {
+                console.log(`[AGENT-SEARCH] 🔄 All results from same file, will try to diversify`);
+                return true;
+            }
+        }
+
+        // Low average score - results might not be relevant enough
+        if (results.length > 0) {
+            const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
+            if (avgScore < 0.5 && this.currentIteration < 2) {
+                console.log(`[AGENT-SEARCH] 🔄 Low average score (${avgScore.toFixed(2)}), will try refinement`);
+                return true;
+            }
+        }
+
+        // Limit refinement iterations to prevent excessive searches
+        if (this.currentIteration >= 2) {
+            console.log(`[AGENT-SEARCH] 🛑 Already refined ${this.currentIteration} times, stopping`);
             return false;
         }
 
-        // Only refine once for now
-        if (this.currentIteration > 1) {
-            return false;
-        }
-
-        return true;
+        // Default: don't refine if we have decent results
+        console.log(`[AGENT-SEARCH] 🛑 Have ${results.length} results, stopping refinement`);
+        return false;
     }
 
     /**
      * Generate a refined query based on initial results
-     * This is a placeholder that will be enhanced in subtask-1-3
+     * Analyzes result context to create more targeted queries
      */
     private generateRefinedQuery(originalQuery: string, results: SemanticSearchResult[]): string {
-        // Simple implementation for now: just return original query
-        // Will be enhanced with semantic analysis in subtask-1-3
+        // If no results, broaden the query by removing specific terms
+        if (results.length === 0) {
+            const words = originalQuery.split(/\s+/);
+            if (words.length > 2) {
+                // Remove last word to broaden search
+                const broadened = words.slice(0, -1).join(' ');
+                console.log(`[AGENT-SEARCH] 📝 Broadening query: "${originalQuery}" → "${broadened}"`);
+                return broadened;
+            }
+            // If already short, try adding common programming terms
+            const refinements = ['implementation', 'function', 'method', 'class'];
+            for (const term of refinements) {
+                if (!originalQuery.toLowerCase().includes(term)) {
+                    const refined = `${originalQuery} ${term}`;
+                    console.log(`[AGENT-SEARCH] 📝 Adding term to query: "${originalQuery}" → "${refined}"`);
+                    return refined;
+                }
+            }
+            return originalQuery;
+        }
+
+        // Extract meaningful terms from top results
+        const topResults = results.slice(0, 3);
+        const terms = new Set<string>();
+
+        for (const result of topResults) {
+            // Extract file name without extension
+            const fileName = result.relativePath.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+
+            // Extract camelCase/PascalCase words from file name
+            const words = fileName.split(/[_\-\/]|(?=[A-Z])/).filter(w => w.length > 2);
+            words.forEach(w => terms.add(w.toLowerCase()));
+
+            // Extract significant words from code content (if available)
+            if (result.content) {
+                // Look for class/function names
+                const classMatch = result.content.match(/(?:class|interface|type)\s+(\w+)/);
+                const functionMatch = result.content.match(/(?:function|const|let)\s+(\w+)/);
+
+                if (classMatch && classMatch[1]) {
+                    terms.add(classMatch[1].toLowerCase());
+                }
+                if (functionMatch && functionMatch[1]) {
+                    terms.add(functionMatch[1].toLowerCase());
+                }
+            }
+        }
+
+        // Remove terms already in original query
+        const queryTerms = new Set(originalQuery.toLowerCase().split(/\s+/));
+        const newTerms = Array.from(terms).filter(t => !queryTerms.has(t));
+
+        // If we found new relevant terms, add the most common one
+        if (newTerms.length > 0) {
+            const refined = `${originalQuery} ${newTerms[0]}`;
+            console.log(`[AGENT-SEARCH] 📝 Refining with extracted term: "${originalQuery}" → "${refined}"`);
+            return refined;
+        }
+
+        // If all results from same directory, try searching in parent context
+        const uniqueDirs = new Set(topResults.map(r => r.relativePath.split('/').slice(0, -1).join('/')));
+        if (uniqueDirs.size === 1) {
+            const dir = Array.from(uniqueDirs)[0];
+            const dirName = dir.split('/').pop() || '';
+            if (dirName && !originalQuery.toLowerCase().includes(dirName.toLowerCase())) {
+                const refined = `${originalQuery} in ${dirName}`;
+                console.log(`[AGENT-SEARCH] 📝 Adding directory context: "${originalQuery}" → "${refined}"`);
+                return refined;
+            }
+        }
+
+        // Default: return original if no refinement strategy applies
+        console.log(`[AGENT-SEARCH] 📝 No refinement needed, keeping original query`);
         return originalQuery;
     }
 
     /**
      * Generate related queries for breadth-first search
-     * This is a placeholder that will be enhanced in subtask-1-3
+     * Creates semantic variations to explore different aspects
      */
     private generateRelatedQueries(query: string): string[] {
-        // Simple implementation: return variations of the query
-        // Will be enhanced in subtask-1-3
-        const queries = [query];
+        const queries = [query]; // Start with original
+        const lowerQuery = query.toLowerCase();
 
-        // Add some basic variations
-        if (!query.toLowerCase().includes('test')) {
-            queries.push(`${query} tests`);
-        }
-        if (!query.toLowerCase().includes('implementation')) {
+        // Perspective 1: Implementation vs Interface
+        if (!lowerQuery.includes('implementation') && !lowerQuery.includes('interface')) {
             queries.push(`${query} implementation`);
+            queries.push(`${query} interface`);
+        } else if (lowerQuery.includes('implementation')) {
+            queries.push(query.replace(/implementation/i, 'interface'));
+        } else if (lowerQuery.includes('interface')) {
+            queries.push(query.replace(/interface/i, 'implementation'));
         }
 
-        return queries.slice(0, 3); // Limit to 3 queries for now
+        // Perspective 2: Testing
+        if (!lowerQuery.includes('test') && !lowerQuery.includes('spec')) {
+            queries.push(`${query} tests`);
+            queries.push(`${query} test cases`);
+        }
+
+        // Perspective 3: Usage/Examples
+        if (!lowerQuery.includes('usage') && !lowerQuery.includes('example')) {
+            queries.push(`${query} usage`);
+            queries.push(`how to use ${query}`);
+        }
+
+        // Perspective 4: Configuration
+        if (!lowerQuery.includes('config') && !lowerQuery.includes('setup')) {
+            queries.push(`${query} configuration`);
+            queries.push(`${query} setup`);
+        }
+
+        // Perspective 5: Error handling
+        if (!lowerQuery.includes('error') && !lowerQuery.includes('exception')) {
+            queries.push(`${query} error handling`);
+        }
+
+        // Perspective 6: Common related terms
+        const variations: Record<string, string[]> = {
+            'search': ['find', 'query', 'lookup'],
+            'create': ['new', 'initialize', 'setup'],
+            'delete': ['remove', 'destroy', 'clear'],
+            'update': ['modify', 'change', 'edit'],
+            'get': ['fetch', 'retrieve', 'load'],
+            'set': ['update', 'configure', 'assign'],
+            'handler': ['processor', 'controller', 'manager'],
+            'service': ['provider', 'manager', 'handler'],
+            'util': ['helper', 'utility', 'common']
+        };
+
+        for (const [term, alternatives] of Object.entries(variations)) {
+            if (lowerQuery.includes(term)) {
+                for (const alt of alternatives.slice(0, 1)) { // Only use first alternative
+                    queries.push(query.replace(new RegExp(term, 'gi'), alt));
+                }
+                break; // Only apply one variation set
+            }
+        }
+
+        // Remove duplicates and limit total queries
+        const uniqueQueries = Array.from(new Set(queries));
+
+        // Limit based on maxIterations to avoid overwhelming searches
+        const limit = Math.min(this.maxIterations, 5);
+        const limited = uniqueQueries.slice(0, limit);
+
+        console.log(`[AGENT-SEARCH] 🌊 Generated ${limited.length} related queries from "${query}"`);
+        for (let i = 0; i < limited.length; i++) {
+            console.log(`[AGENT-SEARCH]    ${i + 1}. "${limited[i]}"`);
+        }
+
+        return limited;
     }
 
     /**
      * Identify focus areas for deep dive based on initial results
-     * This is a placeholder that will be enhanced in subtask-1-3
+     * Analyzes result patterns to determine promising areas for detailed exploration
      */
     private identifyFocusAreas(results: SemanticSearchResult[]): string[] {
-        // Simple implementation: extract key terms from top results
-        // Will be enhanced in subtask-1-3
         const focusAreas: string[] = [];
 
-        if (results.length > 0) {
-            // For now, just use the file paths as focus areas
-            const topResult = results[0];
-            const fileName = topResult.relativePath.split('/').pop() || '';
-            if (fileName) {
-                focusAreas.push(`functions in ${fileName}`);
+        if (results.length === 0) {
+            return focusAreas;
+        }
+
+        // Strategy 1: Identify files with multiple matches (hotspots)
+        const fileFrequency = new Map<string, number>();
+        for (const result of results) {
+            const count = fileFrequency.get(result.relativePath) || 0;
+            fileFrequency.set(result.relativePath, count + 1);
+        }
+
+        const hotspots = Array.from(fileFrequency.entries())
+            .filter(([_, count]) => count >= 2)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 2);
+
+        for (const [filePath, count] of hotspots) {
+            const fileName = filePath.split('/').pop() || '';
+            focusAreas.push(`related code in ${fileName}`);
+            console.log(`[AGENT-SEARCH] 🎯 Identified hotspot: ${fileName} (${count} matches)`);
+        }
+
+        // Strategy 2: Extract class/function names from top results
+        const topResults = results.slice(0, 3);
+        const identifiers = new Set<string>();
+
+        for (const result of topResults) {
+            if (result.content) {
+                // Extract class names
+                const classMatches = result.content.matchAll(/(?:class|interface|type)\s+(\w+)/g);
+                for (const match of classMatches) {
+                    if (match[1] && match[1].length > 2) {
+                        identifiers.add(match[1]);
+                    }
+                }
+
+                // Extract function names
+                const functionMatches = result.content.matchAll(/(?:function|const|let|async)\s+(\w+)/g);
+                for (const match of functionMatches) {
+                    if (match[1] && match[1].length > 3) {
+                        identifiers.add(match[1]);
+                    }
+                }
+
+                // Extract method calls (potential dependencies)
+                const methodCalls = result.content.matchAll(/(\w+)\s*\(/g);
+                for (const match of methodCalls) {
+                    if (match[1] && match[1].length > 3 && !['if', 'for', 'while', 'switch'].includes(match[1])) {
+                        identifiers.add(match[1]);
+                    }
+                }
             }
         }
 
-        return focusAreas.slice(0, 2); // Limit to 2 focus areas
+        // Add top identifiers as focus areas
+        const topIdentifiers = Array.from(identifiers).slice(0, 2);
+        for (const identifier of topIdentifiers) {
+            if (focusAreas.length < 3) {
+                focusAreas.push(`${identifier} implementation details`);
+                console.log(`[AGENT-SEARCH] 🎯 Identified focus area: ${identifier}`);
+            }
+        }
+
+        // Strategy 3: Directory-based focus (if results span multiple directories)
+        const directories = new Map<string, number>();
+        for (const result of results) {
+            const dir = result.relativePath.split('/').slice(0, -1).join('/');
+            if (dir) {
+                const count = directories.get(dir) || 0;
+                directories.set(dir, count + 1);
+            }
+        }
+
+        const topDirs = Array.from(directories.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 1);
+
+        for (const [dir, count] of topDirs) {
+            if (focusAreas.length < 4 && count >= 2) {
+                const dirName = dir.split('/').pop() || dir;
+                focusAreas.push(`related code in ${dirName} directory`);
+                console.log(`[AGENT-SEARCH] 🎯 Identified directory focus: ${dirName} (${count} matches)`);
+            }
+        }
+
+        // Limit total focus areas based on remaining iterations
+        const maxFocusAreas = Math.min(this.maxIterations - this.currentIteration, 3);
+        const limited = focusAreas.slice(0, maxFocusAreas);
+
+        console.log(`[AGENT-SEARCH] 🔍 Identified ${limited.length} focus areas for deep dive`);
+
+        return limited;
     }
 
     /**
