@@ -24,6 +24,8 @@ import { FileSynchronizer } from './sync/synchronizer';
 import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
 import { RankingConfig, DEFAULT_RANKING_CONFIG, RankedSearchResult } from './ranking/types';
 import { Ranker } from './ranking/ranker';
+import { ChokidarFileWatcher } from './watcher/file-watcher';
+import { FileWatcher, FileChangeEvent, FileChangeCallback } from './watcher/types';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
@@ -115,6 +117,7 @@ export class Context {
     private importFrequencyMap: ImportFrequency;
     private rankingConfig: RankingConfig;
     private ranker: Ranker;
+    private fileWatcher: FileWatcher | null;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -140,6 +143,9 @@ export class Context {
 
         // Initialize ranker with configuration
         this.ranker = new Ranker(this.rankingConfig);
+
+        // Initialize file watcher
+        this.fileWatcher = null;
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -1434,5 +1440,120 @@ export class Context {
                 reason: 'Using LangChain splitter directly'
             };
         }
+    }
+
+    /**
+     * Start watching for file changes in a codebase
+     * @param codebasePath Path to the codebase to watch
+     * @param onChangeCallback Optional callback to handle file changes
+     * @param debounceMs Optional debounce delay in milliseconds (default: 2000)
+     */
+    async startWatching(codebasePath: string, onChangeCallback?: FileChangeCallback, debounceMs: number = 2000): Promise<void> {
+        if (this.fileWatcher && this.fileWatcher.isWatching()) {
+            console.warn('File watcher is already running. Stop it first before starting a new one.');
+            return;
+        }
+
+        try {
+            console.log(`👀 Starting file watcher for ${codebasePath}`);
+
+            // Create the file watcher with the codebase path and ignore patterns
+            this.fileWatcher = new ChokidarFileWatcher(codebasePath, {
+                paths: codebasePath,
+                debounceMs,
+                recursive: true,
+                ignoreInitial: true,
+                ignored: this.createIgnorePatternMatcher(),
+                watchFile: true,
+                watchDirectory: false
+            });
+
+            // Set up the change callback
+            if (onChangeCallback) {
+                this.fileWatcher.onChange(onChangeCallback);
+            } else {
+                // Default callback: reindex changed files
+                this.fileWatcher.onChange(async (changedFiles: Set<string>, events: FileChangeEvent[]) => {
+                    console.log(`📝 Detected ${changedFiles.size} file changes`);
+                    changedFiles.forEach(file => {
+                        console.log(`  - ${file}`);
+                    });
+
+                    // Trigger reindexing for the changed files
+                    try {
+                        await this.reindexByChange(codebasePath);
+                        console.log('✅ Auto reindexing completed');
+                    } catch (error) {
+                        console.error('❌ Error during auto reindexing:', error);
+                    }
+                });
+            }
+
+            // Set up error callback
+            this.fileWatcher.onError((error: Error) => {
+                console.error('File watcher error:', error);
+            });
+
+            // Start the watcher
+            await this.fileWatcher.start();
+            console.log('✅ File watcher started successfully');
+        } catch (error) {
+            console.error('Failed to start file watcher:', error);
+            this.fileWatcher = null;
+            throw error;
+        }
+    }
+
+    /**
+     * Stop watching for file changes
+     */
+    async stopWatching(): Promise<void> {
+        if (!this.fileWatcher || !this.fileWatcher.isWatching()) {
+            console.warn('File watcher is not running');
+            return;
+        }
+
+        try {
+            console.log('🛑 Stopping file watcher');
+            await this.fileWatcher.stop();
+            this.fileWatcher = null;
+            console.log('✅ File watcher stopped successfully');
+        } catch (error) {
+            console.error('Failed to stop file watcher:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Check if the file watcher is currently running
+     */
+    isWatching(): boolean {
+        return this.fileWatcher !== null && this.fileWatcher.isWatching();
+    }
+
+    /**
+     * Get file watcher statistics
+     */
+    getWatcherStats(): { watchedFiles: number; totalEvents: number; processedEvents: number; errors: number; startedAt: number } | null {
+        if (!this.fileWatcher) {
+            return null;
+        }
+        return this.fileWatcher.getStats();
+    }
+
+    /**
+     * Create an ignore pattern matcher function for the file watcher
+     * @returns Function that returns true if a path should be ignored
+     */
+    private createIgnorePatternMatcher(): (path: string) => boolean {
+        return (path: string) => {
+            const normalizedPath = path.replace(/\\/g, '/'); // Normalize path separators
+            for (const pattern of this.ignorePatterns) {
+                if (this.isPatternMatch(normalizedPath, pattern)) {
+                    return true;
+                }
+            }
+            return false;
+        };
     }
 }
