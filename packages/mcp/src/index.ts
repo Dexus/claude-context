@@ -119,6 +119,37 @@ This tool is versatile and can be used before completing various tasks to retrie
 - You can then use the index_codebase tool to index the codebase before searching again.
 `;
 
+        const agent_search_description = `
+Perform multi-step, iterative code searches using an intelligent agent that can refine queries and combine results.
+
+⚠️ **IMPORTANT**:
+- You MUST provide an absolute path.
+
+🎯 **When to Use agent_search vs search_code**:
+Use **agent_search** for complex, exploratory tasks that benefit from multiple search iterations:
+- **Multi-step discovery**: "Find all authentication code and related middleware"
+- **Tracing dependencies**: "Find where UserService is implemented and all its callers"
+- **Feature exploration**: "Show me the entire payment processing flow"
+- **Related code discovery**: "Find error handling patterns across the codebase"
+- **Cross-cutting concerns**: "Find all logging implementations and configuration"
+
+Use **search_code** for simple, direct queries with known terminology:
+- **Single function lookup**: "Find the calculateTotal function"
+- **Specific class search**: "Find the UserController class"
+- **Known patterns**: "Find React components using useState"
+
+🔍 **Search Strategies**:
+- **iterative** (default): Refines the query based on initial results, best for focused exploration
+- **breadth-first**: Tries multiple related queries in parallel, best for comprehensive discovery
+- **focused**: Identifies hotspots and searches within those areas, best for tracing code paths
+
+✨ **Usage Guidance**:
+- The agent will explain its search strategy and show all search steps taken
+- Results are automatically deduplicated and combined across multiple searches
+- If the codebase is not indexed, this tool will return a clear error message indicating that indexing is required first.
+- Maximum iterations are clamped between 1-10 to prevent infinite loops
+`;
+
         // Define available tools
         this.server.setRequestHandler(ListToolsRequestSchema, async () => {
             return {
@@ -197,6 +228,51 @@ This tool is versatile and can be used before completing various tasks to retrie
                         }
                     },
                     {
+                        name: "agent_search",
+                        description: agent_search_description,
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                path: {
+                                    type: "string",
+                                    description: `ABSOLUTE path to the codebase directory to search in.`
+                                },
+                                query: {
+                                    type: "string",
+                                    description: "Natural language query describing what code you're looking for"
+                                },
+                                maxIterations: {
+                                    type: "number",
+                                    description: "Maximum number of search iterations the agent can perform (1-10)",
+                                    default: 5,
+                                    minimum: 1,
+                                    maximum: 10
+                                },
+                                strategy: {
+                                    type: "string",
+                                    description: "Search strategy to use: 'iterative' (refines based on results), 'breadth-first' (tries multiple related queries), 'focused' (searches within hotspots)",
+                                    enum: ["iterative", "breadth-first", "focused"],
+                                    default: "iterative"
+                                },
+                                limit: {
+                                    type: "number",
+                                    description: "Maximum number of results to return per search",
+                                    default: 10,
+                                    maximum: 50
+                                },
+                                extensionFilter: {
+                                    type: "array",
+                                    items: {
+                                        type: "string"
+                                    },
+                                    description: "Optional: List of file extensions to filter results. (e.g., ['.ts','.py']).",
+                                    default: []
+                                }
+                            },
+                            required: ["path", "query"]
+                        }
+                    },
+                    {
                         name: "clear_index",
                         description: `Clear the search index. IMPORTANT: You MUST provide an absolute path.`,
                         inputSchema: {
@@ -237,6 +313,8 @@ This tool is versatile and can be used before completing various tasks to retrie
                     return await this.toolHandlers.handleIndexCodebase(args);
                 case "search_code":
                     return await this.toolHandlers.handleSearchCode(args);
+                case "agent_search":
+                    return await this.toolHandlers.handleAgentSearch(args);
                 case "clear_index":
                     return await this.toolHandlers.handleClearIndex(args);
                 case "get_indexing_status":
