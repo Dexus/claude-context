@@ -22,6 +22,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { FileSynchronizer } from './sync/synchronizer';
 import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
+import { RankingConfig, DEFAULT_RANKING_CONFIG } from './ranking/types';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
@@ -99,6 +100,7 @@ export interface ContextConfig {
     ignorePatterns?: string[];
     customExtensions?: string[]; // New: custom extensions from MCP
     customIgnorePatterns?: string[]; // New: custom ignore patterns from MCP
+    rankingConfig?: RankingConfig; // New: configuration for multi-factor ranking
 }
 
 export class Context {
@@ -110,6 +112,7 @@ export class Context {
     private synchronizers = new Map<string, FileSynchronizer>();
     private importAnalyzer: ImportAnalyzer;
     private importFrequencyMap: ImportFrequency;
+    private rankingConfig: RankingConfig;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -129,6 +132,9 @@ export class Context {
         // Initialize import analyzer
         this.importAnalyzer = new ImportAnalyzer();
         this.importFrequencyMap = {};
+
+        // Initialize ranking configuration
+        this.rankingConfig = config.rankingConfig || { ...DEFAULT_RANKING_CONFIG };
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -212,6 +218,22 @@ export class Context {
      */
     setSynchronizer(collectionName: string, synchronizer: FileSynchronizer): void {
         this.synchronizers.set(collectionName, synchronizer);
+    }
+
+    /**
+     * Get ranking configuration
+     */
+    getRankingConfig(): RankingConfig {
+        return { ...this.rankingConfig };
+    }
+
+    /**
+     * Update ranking configuration
+     * @param rankingConfig New ranking configuration
+     */
+    updateRankingConfig(rankingConfig: Partial<RankingConfig>): void {
+        this.rankingConfig = { ...this.rankingConfig, ...rankingConfig };
+        console.log(`🔄 Updated ranking configuration`);
     }
 
     /**
