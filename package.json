@@ -19,17 +19,20 @@
         "release:mcp": "pnpm --filter @dannyboy2042/claude-context-mcp... run build && pnpm --filter @dannyboy2042/claude-context-mcp publish --access public --no-git-checks"
     },
     "devDependencies": {
-        "@types/node": "^20.0.0",
-        "@typescript-eslint/eslint-plugin": "^8.31.1",
-        "@typescript-eslint/parser": "^8.31.1",
+        "@eslint/js": "^9.39.2",
+        "@types/node": "^20.19.30",
+        "@typescript-eslint/eslint-plugin": "^8.53.1",
+        "@typescript-eslint/parser": "^8.53.1",
         "assert": "^2.1.0",
         "browserify-zlib": "^0.2.0",
-        "eslint": "^9.25.1",
+        "eslint": "^9.39.2",
+        "globals": "^17.0.0",
         "https-browserify": "^1.0.0",
         "os-browserify": "^0.3.0",
         "stream-http": "^3.2.0",
-        "tree-sitter-cli": "^0.25.6",
-        "typescript": "^5.8.3",
+        "tree-sitter-cli": "^0.26.3",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.53.1",
         "url": "^0.11.4",
         "vm-browserify": "^1.1.2"
     },
@@ -42,5 +45,26 @@
         "url": "https://github.com/dannyboy2042/claude-context.git"
     },
     "license": "MIT",
-    "author": "Claude Context Community"
+    "author": "Claude Context Community",
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "@derekstride/tree-sitter-sql",
+            "@tree-sitter-grammars/tree-sitter-hcl",
+            "@tree-sitter-grammars/tree-sitter-yaml",
+            "tree-sitter",
+            "tree-sitter-c",
+            "tree-sitter-c-sharp",
+            "tree-sitter-cpp",
+            "tree-sitter-dart",
+            "tree-sitter-go",
+            "tree-sitter-java",
+            "tree-sitter-javascript",
+            "tree-sitter-python",
+            "tree-sitter-rust",
+            "tree-sitter-typescript"
+        ],
+        "peerDependencyRules": {
+            "ignoreMissing": ["tree-sitter"]
+        }
+    }
 }

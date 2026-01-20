@@ -64,7 +64,7 @@ CLAUDE.md
 
 coverage/
 
-# Auto Claude data directory
+# Auto Claude data directory and config files
 .auto-claude/
 
 # Auto Claude generated files

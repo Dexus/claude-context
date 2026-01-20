@@ -1,15 +1,31 @@
 import Parser from 'tree-sitter';
 import { Splitter, CodeChunk } from './index';
 
-// Language parsers
+// Language parsers - native modules require() is necessary
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const JavaScript = require('tree-sitter-javascript');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const TypeScript = require('tree-sitter-typescript').typescript;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Python = require('tree-sitter-python');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Java = require('tree-sitter-java');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Cpp = require('tree-sitter-cpp');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Go = require('tree-sitter-go');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Rust = require('tree-sitter-rust');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const CSharp = require('tree-sitter-c-sharp');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Dart = require('tree-sitter-dart');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Hcl = require('@tree-sitter-grammars/tree-sitter-hcl');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Sql = require('@derekstride/tree-sitter-sql');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Yaml = require('@tree-sitter-grammars/tree-sitter-yaml');
 
 // Node types that represent logical code units
 const SPLITTABLE_NODE_TYPES = {
@@ -20,7 +36,12 @@ const SPLITTABLE_NODE_TYPES = {
     cpp: ['function_definition', 'class_specifier', 'namespace_definition', 'declaration'],
     go: ['function_declaration', 'method_declaration', 'type_declaration', 'var_declaration', 'const_declaration'],
     rust: ['function_item', 'impl_item', 'struct_item', 'enum_item', 'trait_item', 'mod_item'],
-    csharp: ['method_declaration', 'class_declaration', 'interface_declaration', 'struct_declaration', 'enum_declaration']
+    csharp: ['method_declaration', 'class_declaration', 'interface_declaration', 'struct_declaration', 'enum_declaration'],
+    dart: ['class_definition', 'declaration', 'enum_declaration', 'mixin_declaration', 'extension_declaration'],
+    terraform: ['resource', 'data', 'module', 'variable', 'output', 'provider', 'locals', 'terraform'],
+    sql: ['create_table_statement', 'create_view_statement', 'create_index_statement', 'select_statement', 'insert_statement', 'update_statement', 'delete_statement', 'create_function_statement', 'create_procedure_statement'],
+    yaml: ['block_mapping_pair', 'document']
+    // Note: Dockerfile does not have a proper tree-sitter npm package - falls back to LangChain
 };
 
 export class AstCodeSplitter implements Splitter {
@@ -34,7 +55,8 @@ export class AstCodeSplitter implements Splitter {
         if (chunkOverlap) this.chunkOverlap = chunkOverlap;
         this.parser = new Parser();
 
-        // Initialize fallback splitter
+        // Initialize fallback splitter - require() used to avoid circular dependency
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { LangChainCodeSplitter } = require('./langchain-splitter');
         this.langchainFallback = new LangChainCodeSplitter(chunkSize, chunkOverlap);
     }
@@ -96,7 +118,16 @@ export class AstCodeSplitter implements Splitter {
             'go': { parser: Go, nodeTypes: SPLITTABLE_NODE_TYPES.go },
             'rust': { parser: Rust, nodeTypes: SPLITTABLE_NODE_TYPES.rust },
             'rs': { parser: Rust, nodeTypes: SPLITTABLE_NODE_TYPES.rust },
-            'cs': { parser: CSharp, nodeTypes: SPLITTABLE_NODE_TYPES.csharp }
+            'csharp': { parser: CSharp, nodeTypes: SPLITTABLE_NODE_TYPES.csharp },
+            'cs': { parser: CSharp, nodeTypes: SPLITTABLE_NODE_TYPES.csharp },
+            'dart': { parser: Dart, nodeTypes: SPLITTABLE_NODE_TYPES.dart },
+            'terraform': { parser: Hcl, nodeTypes: SPLITTABLE_NODE_TYPES.terraform },
+            'hcl': { parser: Hcl, nodeTypes: SPLITTABLE_NODE_TYPES.terraform },
+            'tf': { parser: Hcl, nodeTypes: SPLITTABLE_NODE_TYPES.terraform },
+            'sql': { parser: Sql, nodeTypes: SPLITTABLE_NODE_TYPES.sql },
+            'yaml': { parser: Yaml, nodeTypes: SPLITTABLE_NODE_TYPES.yaml },
+            'yml': { parser: Yaml, nodeTypes: SPLITTABLE_NODE_TYPES.yaml }
+            // Note: Dockerfile does not have a proper tree-sitter npm package - falls back to LangChain
         };
 
         return langMap[language.toLowerCase()] || null;
@@ -173,7 +204,7 @@ export class AstCodeSplitter implements Splitter {
         return this.addOverlap(refinedChunks);
     }
 
-    private splitLargeChunk(chunk: CodeChunk, originalCode: string): CodeChunk[] {
+    private splitLargeChunk(chunk: CodeChunk, _originalCode: string): CodeChunk[] {
         const lines = chunk.content.split('\n');
         const subChunks: CodeChunk[] = [];
         let currentChunk = '';
@@ -254,13 +285,21 @@ export class AstCodeSplitter implements Splitter {
     }
 
     /**
+     * Get list of supported languages for AST splitting
+     */
+    static getSupportedLanguages(): string[] {
+        return [
+            'javascript', 'js', 'typescript', 'ts', 'python', 'py',
+            'java', 'cpp', 'c++', 'c', 'go', 'rust', 'rs', 'csharp', 'cs',
+            'dart', 'terraform', 'hcl', 'tf', 'sql', 'yaml', 'yml'
+            // Note: Dockerfile falls back to LangChain (no tree-sitter npm package)
+        ];
+    }
+
+    /**
      * Check if AST splitting is supported for the given language
      */
     static isLanguageSupported(language: string): boolean {
-        const supportedLanguages = [
-            'javascript', 'js', 'typescript', 'ts', 'python', 'py',
-            'java', 'cpp', 'c++', 'c', 'go', 'rust', 'rs', 'cs'
-        ];
-        return supportedLanguages.includes(language.toLowerCase());
+        return AstCodeSplitter.getSupportedLanguages().includes(language.toLowerCase());
     }
 }

@@ -2,8 +2,11 @@
 
 // CRITICAL: Redirect console outputs to stderr IMMEDIATELY to avoid interfering with MCP JSON protocol
 // Only MCP protocol messages should go to stdout
-const originalConsoleLog = console.log;
-const originalConsoleWarn = console.warn;
+// Preserving original console methods for potential future restoration
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _originalConsoleLog = console.log;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _originalConsoleWarn = console.warn;
 
 console.log = (...args: any[]) => {
     process.stderr.write('[LOG] ' + args.join(' ') + '\n');
