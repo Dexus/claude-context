@@ -2,7 +2,7 @@
   "feature": "File Change Detection & Auto Re-indexing",
   "description": "Implement file system watchers to detect when files change and automatically update the index incrementally. Support debouncing to batch rapid changes and provide notifications when re-indexing completes.",
   "workflow_type": "feature",
-  "workflow_rationale": "This is a feature workflow because we're adding new functionality (file watching and auto-reindexing) to the existing codebase. The implementation spans multiple services (core watcher and MCP server integration) with clear dependencies: the core watcher must be built before it can be integrated into the MCP server. The phases follow the natural flow: Core watcher implementation → Configuration → MCP integration → Testing.",
+  "workflow_rationale": "This is a feature workflow because we're adding new functionality (file watching and auto-reindexing) to the existing codebase. The implementation spans multiple services (core watcher and MCP server integration) with clear dependencies: the core watcher must be built before it can be integrated into the MCP server. The phases follow the natural flow: Core watcher implementation \u2192 Configuration \u2192 MCP integration \u2192 Testing.",
   "phases": [
     {
       "id": "phase-1-core-watcher",
@@ -320,7 +320,8 @@
             "command": "pnpm install && cd packages/core && yarn build 2>&1 | tail -5",
             "expected": "Successfully built"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Fixed TypeScript errors: 1) Type declaration for options to handle optional ignored parameter, 2) Conditionally pass ignored to chokidar, 3) Fixed handleReady() to count files correctly. Build now compiles successfully."
         }
       ]
     },
@@ -576,5 +577,5 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-01-20T15:49:27.765Z"
+  "updated_at": "2026-01-20T16:52:00.000Z"
 }
