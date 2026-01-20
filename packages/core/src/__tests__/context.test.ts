@@ -97,7 +97,8 @@ import { FileSynchronizer } from '../sync/synchronizer';
 function createMockEmbedding(): jest.Mocked<Embedding> {
     return {
         embed: jest.fn().mockResolvedValue({ vector: Array(1536).fill(0.1), dimension: 1536 }),
-        embedBatch: jest.fn().mockResolvedValue([{ vector: Array(1536).fill(0.1), dimension: 1536 }]),
+        embedBatch: jest.fn().mockImplementation((texts: string[]) =>
+            Promise.resolve(texts.map(() => ({ vector: Array(1536).fill(0.1), dimension: 1536 })))),
         getDimension: jest.fn().mockReturnValue(1536),
         getProvider: jest.fn().mockReturnValue('MockProvider'),
         detectDimension: jest.fn().mockResolvedValue(1536),

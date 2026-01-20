@@ -14,6 +14,7 @@
         "lint": "pnpm -r lint",
         "lint:fix": "pnpm -r run lint:fix",
         "typecheck": "pnpm -r run typecheck",
+        "test:core": "pnpm --filter @dannyboy2042/claude-context-core test",
         "release:core": "pnpm --filter @dannyboy2042/claude-context-core... run build && pnpm --filter @dannyboy2042/claude-context-core publish --access public --no-git-checks",
         "release:mcp": "pnpm --filter @dannyboy2042/claude-context-mcp... run build && pnpm --filter @dannyboy2042/claude-context-mcp publish --access public --no-git-checks"
     },

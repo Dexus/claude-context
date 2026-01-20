@@ -46,16 +46,16 @@ The core package has comprehensive test coverage with both unit tests (mocked) a
 
 ```bash
 # Run all unit tests (no API keys required)
-npm test
+pnpm test
 
 # Run tests in watch mode
-npm test -- --watch
+pnpm test -- --watch
 
 # Run tests with coverage
-npm test -- --coverage
+pnpm test -- --coverage
 
 # Run specific test file
-npm test -- --testPathPatterns="context.test"
+pnpm test -- --testPathPattern="context.test"
 ```
 
 ### Test Structure
@@ -108,23 +108,23 @@ Integration tests make real API calls to verify correct behavior with actual emb
 
 ```bash
 # Run OpenAI integration tests
-OPENAI_API_KEY=sk-xxx npm test -- --testPathPatterns="integration/openai"
+OPENAI_API_KEY=sk-xxx pnpm test -- --testPathPattern="integration/openai"
 
 # Run Gemini integration tests
-GEMINI_API_KEY=xxx npm test -- --testPathPatterns="integration/gemini"
+GEMINI_API_KEY=xxx pnpm test -- --testPathPattern="integration/gemini"
 
 # Run VoyageAI integration tests
-VOYAGEAI_API_KEY=xxx npm test -- --testPathPatterns="integration/voyageai"
+VOYAGEAI_API_KEY=xxx pnpm test -- --testPathPattern="integration/voyageai"
 
 # Run Ollama integration tests (requires Ollama running locally)
-OLLAMA_ENABLED=true npm test -- --testPathPatterns="integration/ollama"
+OLLAMA_ENABLED=true pnpm test -- --testPathPattern="integration/ollama"
 
 # Run all integration tests
 OPENAI_API_KEY=sk-xxx \
 GEMINI_API_KEY=xxx \
 VOYAGEAI_API_KEY=xxx \
 OLLAMA_ENABLED=true \
-npm test -- --testPathPatterns="integration"
+pnpm test -- --testPathPattern="integration"
 ```
 
 #### Ollama Prerequisites
@@ -206,7 +206,7 @@ if (!API_KEY) {
 We aim for high test coverage. Run coverage report:
 
 ```bash
-npm test -- --coverage
+pnpm test -- --coverage
 ```
 
 Coverage reports are generated in the `coverage/` directory.
