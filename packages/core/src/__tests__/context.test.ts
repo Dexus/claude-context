@@ -781,6 +781,7 @@ describe('Context', () => {
                         startLine: 1,
                         endLine: 10,
                         fileExtension: '.ts',
+                        mtime: Date.now(),
                         metadata: { language: 'typescript' }
                     },
                     score: 0.9
@@ -831,6 +832,7 @@ describe('Context', () => {
                         startLine: 5,
                         endLine: 10,
                         fileExtension: '.ts',
+                        mtime: Date.now(),
                         metadata: { language: 'typescript' }
                     },
                     score: 0.85

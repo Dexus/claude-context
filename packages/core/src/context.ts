@@ -711,7 +711,7 @@ export class Context {
         const CHUNK_LIMIT = 450000;
         console.log(`🔧 Using EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE}`);
 
-        let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string }> = [];
+        let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }> = [];
         let processedFiles = 0;
         let totalChunks = 0;
         let limitReached = false;
@@ -720,6 +720,8 @@ export class Context {
             const filePath = filePaths[i];
 
             try {
+                const stats = await fs.promises.stat(filePath);
+                const mtime = stats.mtimeMs;
                 const content = await fs.promises.readFile(filePath, 'utf-8');
                 const language = this.getLanguageFromFilePath(filePath);
                 const chunks = await this.codeSplitter.split(content, language, filePath);
@@ -733,7 +735,7 @@ export class Context {
 
                 // Add chunks to buffer
                 for (const chunk of chunks) {
-                    chunkBuffer.push({ chunk, codebasePath });
+                    chunkBuffer.push({ chunk, codebasePath, mtime });
                     totalChunks++;
 
                     // Process batch when buffer reaches EMBEDDING_BATCH_SIZE
@@ -795,12 +797,13 @@ export class Context {
     /**
  * Process accumulated chunk buffer
  */
-    private async processChunkBuffer(chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string }>): Promise<void> {
+    private async processChunkBuffer(chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }>): Promise<void> {
         if (chunkBuffer.length === 0) return;
 
         // Extract chunks and ensure they all have the same codebasePath
         const chunks = chunkBuffer.map(item => item.chunk);
         const codebasePath = chunkBuffer[0].codebasePath;
+        const mtimes = chunkBuffer.map(item => item.mtime);
 
         // Estimate tokens (rough estimation: 1 token ≈ 4 characters)
         const estimatedTokens = chunks.reduce((sum, chunk) => sum + Math.ceil(chunk.content.length / 4), 0);
@@ -808,13 +811,13 @@ export class Context {
         const isHybrid = this.getIsHybrid();
         const searchType = isHybrid === true ? 'hybrid' : 'regular';
         console.log(`🔄 Processing batch of ${chunks.length} chunks (~${estimatedTokens} tokens) for ${searchType}`);
-        await this.processChunkBatch(chunks, codebasePath);
+        await this.processChunkBatch(chunks, codebasePath, mtimes);
     }
 
     /**
      * Process a batch of chunks
      */
-    private async processChunkBatch(chunks: CodeChunk[], codebasePath: string): Promise<void> {
+    private async processChunkBatch(chunks: CodeChunk[], codebasePath: string, mtimes: number[]): Promise<void> {
         const isHybrid = this.getIsHybrid();
 
         // Generate embedding vectors
@@ -842,6 +845,7 @@ export class Context {
                     startLine: chunk.metadata.startLine || 0,
                     endLine: chunk.metadata.endLine || 0,
                     fileExtension,
+                    mtime: mtimes[index],
                     metadata: {
                         ...restMetadata,
                         codebasePath,
@@ -874,6 +878,7 @@ export class Context {
                     startLine: chunk.metadata.startLine || 0,
                     endLine: chunk.metadata.endLine || 0,
                     fileExtension,
+                    mtime: mtimes[index],
                     metadata: {
                         ...restMetadata,
                         codebasePath,
