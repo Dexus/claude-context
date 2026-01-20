@@ -609,26 +609,109 @@ export class AgentSearch {
 
     /**
      * Combine and deduplicate results from all steps
-     * This is a basic implementation that will be enhanced in subtask-1-4
+     * Implements smart merging of overlapping chunks and score aggregation
      */
     private combineResults(): SemanticSearchResult[] {
-        // Simple deduplication by file path and line numbers
-        // Will be enhanced with smarter merging in subtask-1-4
-        const seen = new Set<string>();
-        const combined: SemanticSearchResult[] = [];
+        console.log(`[AGENT-SEARCH] 🔄 Combining and deduplicating ${this.allResults.length} total results...`);
 
-        for (const result of this.allResults) {
-            const key = `${result.relativePath}:${result.startLine}-${result.endLine}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                combined.push(result);
-            }
+        if (this.allResults.length === 0) {
+            return [];
         }
 
-        // Sort by score (highest first)
+        // Group results by file path for efficient processing
+        const resultsByFile = new Map<string, SemanticSearchResult[]>();
+        for (const result of this.allResults) {
+            const existing = resultsByFile.get(result.relativePath) || [];
+            existing.push(result);
+            resultsByFile.set(result.relativePath, existing);
+        }
+
+        console.log(`[AGENT-SEARCH] 📁 Results span ${resultsByFile.size} unique files`);
+
+        // Process each file's results independently
+        const combined: SemanticSearchResult[] = [];
+        for (const [filePath, fileResults] of resultsByFile.entries()) {
+            const merged = this.mergeFileResults(filePath, fileResults);
+            combined.push(...merged);
+        }
+
+        // Sort by aggregated score (highest first)
         combined.sort((a, b) => b.score - a.score);
 
+        console.log(`[AGENT-SEARCH] ✅ Combined into ${combined.length} unique results (${this.allResults.length - combined.length} duplicates removed)`);
+
         return combined;
+    }
+
+    /**
+     * Merge results from the same file, handling overlaps and duplicates
+     */
+    private mergeFileResults(filePath: string, results: SemanticSearchResult[]): SemanticSearchResult[] {
+        if (results.length === 0) {
+            return [];
+        }
+
+        // Sort by start line for easier overlap detection
+        const sorted = [...results].sort((a, b) => a.startLine - b.startLine);
+
+        const merged: SemanticSearchResult[] = [];
+        let current = { ...sorted[0] };
+        let occurrences = 1;
+
+        for (let i = 1; i < sorted.length; i++) {
+            const next = sorted[i];
+
+            // Check for exact duplicate (same line range)
+            if (current.startLine === next.startLine && current.endLine === next.endLine) {
+                // Aggregate scores - take max but boost for multiple occurrences
+                const maxScore = Math.max(current.score, next.score);
+                const boostFactor = Math.min(1 + (occurrences * 0.05), 1.3); // Max 30% boost
+                current.score = Math.min(maxScore * boostFactor, 1.0);
+                occurrences++;
+                console.log(`[AGENT-SEARCH] 🔗 Duplicate found at ${filePath}:${current.startLine}-${current.endLine}, boosted score to ${current.score.toFixed(3)}`);
+                continue;
+            }
+
+            // Check for overlap or adjacency (within 3 lines)
+            const isOverlapping = next.startLine <= current.endLine;
+            const isAdjacent = next.startLine <= current.endLine + 3;
+
+            if (isOverlapping || isAdjacent) {
+                // Merge the chunks - extend the range and take best content
+                const oldEnd = current.endLine;
+                current.endLine = Math.max(current.endLine, next.endLine);
+
+                // Weighted score based on overlap
+                const overlapRatio = isOverlapping
+                    ? (Math.min(current.endLine, next.endLine) - next.startLine) / (next.endLine - next.startLine)
+                    : 0;
+                const weight = isOverlapping ? (1 - overlapRatio * 0.5) : 0.7; // Less weight for overlaps
+                current.score = (current.score + next.score * weight) / (1 + weight);
+
+                // Prefer longer content or combine if significantly different
+                if (next.content && next.content.length > (current.content?.length || 0)) {
+                    current.content = next.content;
+                }
+
+                occurrences++;
+                console.log(`[AGENT-SEARCH] 🔀 Merged ${isOverlapping ? 'overlapping' : 'adjacent'} chunk at ${filePath}:${next.startLine}-${next.endLine} (extended ${oldEnd} → ${current.endLine})`);
+                continue;
+            }
+
+            // No overlap/adjacency - save current and start new chunk
+            merged.push(current);
+            current = { ...next };
+            occurrences = 1;
+        }
+
+        // Don't forget the last chunk
+        merged.push(current);
+
+        if (results.length !== merged.length) {
+            console.log(`[AGENT-SEARCH] 📦 File ${filePath}: ${results.length} results → ${merged.length} merged (${results.length - merged.length} combined)`);
+        }
+
+        return merged;
     }
 
     /**
