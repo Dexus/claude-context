@@ -369,6 +369,7 @@ For more detailed MCP environment variable configuration, see our [Environment V
 - 📊 **Smart Result Ranking**: Intelligent ranking algorithm that optimizes search results based on semantic relevance, code context, and query patterns
 - 🏠 **100% Local**: Everything runs locally using LanceDB - your code never leaves your machine
 - ⚡ **Fast & Incremental**: Smart indexing that only processes changed files
+- 👁️ **Auto-Reindexing**: Automatic file watching detects changes and updates your index in real-time
 - 🧩 **AST-Powered**: Intelligent code chunking using Abstract Syntax Trees for better context
 - 🗄️ **No Limits**: Handle codebases of any size locally
 - 🛠️ **Zero Config**: Works out of the box - just add your OpenAI API key
@@ -380,11 +381,60 @@ Claude Context is a monorepo containing three main packages:
 - **`@dexus1985/claude-context-mcp`**: Model Context Protocol server for AI agent integration
 
 ### Supported Technologies
-- **Vector Database**: [LanceDB](https://lancedb.github.io/lancedb/) (local, embedded, zero-config) 
+- **Vector Database**: [LanceDB](https://lancedb.github.io/lancedb/) (local, embedded, zero-config)
 - **Embedding**: [OpenAI](https://openai.com) text-embedding-3-small (other providers available: VoyageAI, Ollama, Gemini)
 - **Code Analysis**: AST-based intelligent chunking with LangChain fallback
 - **Languages**: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala, Markdown
 - **AI Clients**: Claude Code, Cursor, Windsurf, Gemini CLI, and all MCP-compatible clients
+
+### 🔄 Automatic File Watching & Re-indexing
+
+Claude Context now includes **automatic file watching** to keep your index up-to-date as you code. No more manual re-indexing!
+
+**How It Works:**
+- After you index a codebase, Claude Context automatically watches for file changes
+- When you save, add, or delete files, the changes are detected within 1 second (configurable)
+- Only changed files are re-indexed incrementally - fast and efficient
+- Re-indexing runs in the background, so searches are never blocked
+- You'll receive notifications when re-indexing completes
+
+**Environment Variables:**
+
+Configure file watching behavior with these environment variables:
+
+```bash
+# Enable/disable automatic file watching (default: true)
+ENABLE_FILE_WATCHER=true
+
+# Debounce time in milliseconds for file changes (default: 1000)
+# Increase if you experience performance issues during rapid file saves
+FILE_WATCH_DEBOUNCE_MS=1000
+```
+
+**Usage Example:**
+
+```bash
+# Start MCP server with file watching enabled
+claude mcp add claude-context \
+  -e OPENAI_API_KEY=your-key \
+  -e ENABLE_FILE_WATCHER=true \
+  -e FILE_WATCH_DEBOUNCE_MS=2000 \
+  -- npx @dannyboy2042/claude-context-mcp@latest
+```
+
+**Key Benefits:**
+- ✅ **Zero Manual Intervention**: Index stays current automatically as you code
+- ✅ **Efficient**: Only changed files are re-indexed (not full rebuilds)
+- ✅ **Non-Blocking**: Re-indexing runs in background while you work
+- ✅ **Smart Debouncing**: Rapid changes are batched to avoid excessive re-indexing
+- ✅ **Configurable**: Can be disabled for CI/CD or resource-constrained environments
+
+**Limitations & Considerations:**
+- File watching is enabled by default for the best user experience
+- In CI/CD environments, consider setting `ENABLE_FILE_WATCHER=false` to avoid unnecessary background processing
+- Very large codebases with frequent changes may benefit from increasing `FILE_WATCH_DEBOUNCE_MS`
+- File watchers monitor the indexed directory and all subdirectories recursively
+- Symbolic links and network drives may have limited support depending on your operating system
 
 <details>
 <summary>🔧 Advanced: Optional Cloud Vector Database</summary>

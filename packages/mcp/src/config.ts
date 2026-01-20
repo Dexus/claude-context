@@ -17,6 +17,9 @@ export interface ContextMcpConfig {
     // Vector database configuration
     milvusAddress?: string; // Optional, can be auto-resolved from token
     milvusToken?: string;
+    // File watcher configuration
+    enableFileWatcher?: boolean;
+    fileWatchDebounceMs?: number;
 }
 
 export interface CodebaseSnapshot {
@@ -69,6 +72,8 @@ export function createMcpConfig(): ContextMcpConfig {
     console.log(`[DEBUG]   OPENAI_API_KEY: ${envManager.get('OPENAI_API_KEY') ? 'SET (length: ' + envManager.get('OPENAI_API_KEY')!.length + ')' : 'NOT SET'}`);
     console.log(`[DEBUG]   MILVUS_ADDRESS: ${envManager.get('MILVUS_ADDRESS') || 'NOT SET'}`);
     console.log(`[DEBUG]   NODE_ENV: ${envManager.get('NODE_ENV') || 'NOT SET'}`);
+    console.log(`[DEBUG]   ENABLE_FILE_WATCHER: ${envManager.get('ENABLE_FILE_WATCHER') || 'NOT SET'}`);
+    console.log(`[DEBUG]   FILE_WATCH_DEBOUNCE_MS: ${envManager.get('FILE_WATCH_DEBOUNCE_MS') || 'NOT SET'}`);
 
     const config: ContextMcpConfig = {
         name: envManager.get('MCP_SERVER_NAME') || "Context MCP Server",
@@ -86,7 +91,10 @@ export function createMcpConfig(): ContextMcpConfig {
         ollamaHost: envManager.get('OLLAMA_HOST'),
         // Vector database configuration - address can be auto-resolved from token
         milvusAddress: envManager.get('MILVUS_ADDRESS'), // Optional, can be resolved from token
-        milvusToken: envManager.get('MILVUS_TOKEN')
+        milvusToken: envManager.get('MILVUS_TOKEN'),
+        // File watcher configuration
+        enableFileWatcher: envManager.get('ENABLE_FILE_WATCHER') === 'true',
+        fileWatchDebounceMs: parseInt(envManager.get('FILE_WATCH_DEBOUNCE_MS') || '2000', 10) || 2000
     };
 
     return config;
@@ -154,6 +162,10 @@ Environment Variables:
   Vector Database Configuration:
   MILVUS_ADDRESS          Milvus address (optional, can be auto-resolved from token)
   MILVUS_TOKEN            Milvus token (optional, used for authentication and address resolution)
+
+  File Watcher Configuration:
+  ENABLE_FILE_WATCHER     Enable automatic file watching for codebase changes (default: true)
+  FILE_WATCH_DEBOUNCE_MS  Debounce time for file change events in milliseconds (default: 2000)
 
 Examples:
   # Start MCP server with OpenAI (default) and explicit Milvus address

@@ -40,8 +40,11 @@ class ContextMcpServer {
     private snapshotManager: SnapshotManager;
     private syncManager: SyncManager;
     private toolHandlers: ToolHandlers;
+    private config: ContextMcpConfig;
 
     constructor(config: ContextMcpConfig) {
+        // Store config for later use
+        this.config = config;
         // Initialize MCP server
         this.server = new Server(
             {
@@ -77,12 +80,50 @@ class ContextMcpServer {
         // Initialize managers
         this.snapshotManager = new SnapshotManager();
         this.syncManager = new SyncManager(this.context, this.snapshotManager);
-        this.toolHandlers = new ToolHandlers(this.context, this.snapshotManager);
+        this.toolHandlers = new ToolHandlers(this.context, this.snapshotManager, config);
 
         // Load existing codebase snapshot on startup
         this.snapshotManager.loadCodebaseSnapshot();
 
         this.setupTools();
+    }
+
+    private async initializeFileWatchers(): Promise<void> {
+        // Only initialize file watcher if enabled in config
+        if (!this.config.enableFileWatcher) {
+            console.log('[FILEWATCHER] File watching is disabled in configuration');
+            return;
+        }
+
+        console.log('[FILEWATCHER] Initializing file watchers for indexed codebases...');
+
+        // Get list of indexed codebases from snapshot
+        const indexedCodebases = this.snapshotManager.getIndexedCodebases();
+
+        if (indexedCodebases.length === 0) {
+            console.log('[FILEWATCHER] No indexed codebases found, skipping file watcher initialization');
+            return;
+        }
+
+        console.log(`[FILEWATCHER] Found ${indexedCodebases.length} indexed codebase(s)`);
+
+        // Start file watcher for each indexed codebase
+        for (const codebasePath of indexedCodebases) {
+            try {
+                console.log(`[FILEWATCHER] Starting file watcher for: ${codebasePath}`);
+                await this.context.startWatching(
+                    codebasePath,
+                    undefined, // Use default callback (auto reindex)
+                    this.config.fileWatchDebounceMs || 1000
+                );
+                console.log(`[FILEWATCHER] ✓ File watcher started for: ${codebasePath}`);
+            } catch (error) {
+                console.error(`[FILEWATCHER] ✗ Failed to start file watcher for ${codebasePath}:`, error);
+                // Continue with other codebases even if one fails
+            }
+        }
+
+        console.log('[FILEWATCHER] File watcher initialization complete');
     }
 
     private setupTools() {
@@ -148,6 +189,44 @@ Use **search_code** for simple, direct queries with known terminology:
 - Results are automatically deduplicated and combined across multiple searches
 - If the codebase is not indexed, this tool will return a clear error message indicating that indexing is required first.
 - Maximum iterations are clamped between 1-10 to prevent infinite loops
+`;
+
+        const get_watching_status_description = `
+Get the current file watching status of an indexed codebase.
+
+⚠️ **IMPORTANT**:
+- You MUST provide an absolute path.
+- File watching must be enabled in the MCP server configuration (ENABLE_FILE_WATCHER=true).
+
+🎯 **When to Use**:
+- **Check watcher status**: Verify if a codebase is being watched for file changes
+- **View statistics**: See how many files are being watched and how many change events have been detected
+- **Troubleshooting**: Diagnose why auto-reindexing may not be working
+
+✨ **Usage Guidance**:
+- This tool only works for indexed codebases
+- Returns detailed statistics including watched file count, events processed, and watcher start time
+- If file watching is disabled, this tool will return a message explaining how to enable it
+`;
+
+        const start_watching_description = `
+Start watching an indexed codebase for file changes and enable automatic re-indexing.
+
+⚠️ **IMPORTANT**:
+- You MUST provide an absolute path.
+- File watching must be enabled in the MCP server configuration (ENABLE_FILE_WATCHER=true).
+- The codebase must be indexed first.
+
+🎯 **When to Use**:
+- **Enable auto-reindexing**: Automatically re-index when files change
+- **Active development**: Keep the index up-to-date during coding sessions
+- **Manual control**: Start watching when you need it, stop when you don't
+
+✨ **Usage Guidance**:
+- File changes are debounced (default 2000ms) to batch rapid edits
+- Only changed files are re-indexed (incremental, not full rebuild)
+- Re-indexing runs in background without blocking searches
+- If already watching, you must stop first using stop_watching
 `;
 
         // Define available tools
@@ -300,6 +379,48 @@ Use **search_code** for simple, direct queries with known terminology:
                             required: ["path"]
                         }
                     },
+                    {
+                        name: "get_watching_status",
+                        description: get_watching_status_description,
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                path: {
+                                    type: "string",
+                                    description: `ABSOLUTE path to the codebase directory to check watching status for.`
+                                }
+                            },
+                            required: ["path"]
+                        }
+                    },
+                    {
+                        name: "start_watching",
+                        description: start_watching_description,
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                path: {
+                                    type: "string",
+                                    description: `ABSOLUTE path to the indexed codebase directory to start watching.`
+                                },
+                                debounceMs: {
+                                    type: "number",
+                                    description: "Optional debounce delay in milliseconds to batch rapid file changes. Default: 2000",
+                                    default: 2000
+                                }
+                            },
+                            required: ["path"]
+                        }
+                    },
+                    {
+                        name: "stop_watching",
+                        description: `Stop watching for file changes. Disables automatic re-indexing for the currently watched codebase.`,
+                        inputSchema: {
+                            type: "object",
+                            properties: {},
+                            required: []
+                        }
+                    },
                 ]
             };
         });
@@ -319,6 +440,12 @@ Use **search_code** for simple, direct queries with known terminology:
                     return await this.toolHandlers.handleClearIndex(args);
                 case "get_indexing_status":
                     return await this.toolHandlers.handleGetIndexingStatus(args);
+                case "get_watching_status":
+                    return await this.toolHandlers.handleGetWatchingStatus(args);
+                case "start_watching":
+                    return await this.toolHandlers.handleStartWatching(args);
+                case "stop_watching":
+                    return await this.toolHandlers.handleStopWatching(args);
 
                 default:
                     throw new Error(`Unknown tool: ${name}`);
@@ -340,6 +467,10 @@ Use **search_code** for simple, direct queries with known terminology:
         // Start background sync after server is connected
         console.log('[SYNC-DEBUG] Initializing background sync...');
         this.syncManager.startBackgroundSync();
+
+        // Initialize file watchers for indexed codebases
+        await this.initializeFileWatchers();
+
         console.log('[SYNC-DEBUG] MCP server initialization complete');
     }
 }

@@ -4,5 +4,7 @@ export * from './vectordb';
 export * from './types';
 export * from './context';
 export * from './sync/synchronizer';
+export * from './watcher/types';
+export * from './watcher/file-watcher';
 export * from './utils';
 export * from './ranking';

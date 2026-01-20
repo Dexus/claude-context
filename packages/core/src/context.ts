@@ -24,6 +24,8 @@ import { FileSynchronizer } from './sync/synchronizer';
 import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
 import { RankingConfig, DEFAULT_RANKING_CONFIG, RankedSearchResult } from './ranking/types';
 import { Ranker } from './ranking/ranker';
+import { ChokidarFileWatcher } from './watcher/file-watcher';
+import { FileWatcher, FileChangeEvent, FileChangeCallback } from './watcher/types';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
@@ -115,6 +117,8 @@ export class Context {
     private importFrequencyMap: ImportFrequency;
     private rankingConfig: RankingConfig;
     private ranker: Ranker;
+    private fileWatcher: FileWatcher | null;
+    private reindexingInProgress: boolean;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -140,6 +144,12 @@ export class Context {
 
         // Initialize ranker with configuration
         this.ranker = new Ranker(this.rankingConfig);
+
+        // Initialize file watcher
+        this.fileWatcher = null;
+
+        // Initialize reindexing flag
+        this.reindexingInProgress = false;
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -355,69 +365,83 @@ export class Context {
         codebasePath: string,
         progressCallback?: (progress: { phase: string; current: number; total: number; percentage: number }) => void
     ): Promise<{ added: number, removed: number, modified: number }> {
-        const collectionName = this.getCollectionName(codebasePath);
-        const synchronizer = this.synchronizers.get(collectionName);
-
-        if (!synchronizer) {
-            // Load project-specific ignore patterns before creating FileSynchronizer
-            await this.loadIgnorePatterns(codebasePath);
-
-            // To be safe, let's initialize if it's not there.
-            const newSynchronizer = new FileSynchronizer(codebasePath, this.ignorePatterns);
-            await newSynchronizer.initialize();
-            this.synchronizers.set(collectionName, newSynchronizer);
-        }
-
-        const currentSynchronizer = this.synchronizers.get(collectionName)!;
-
-        progressCallback?.({ phase: 'Checking for file changes...', current: 0, total: 100, percentage: 0 });
-        const { added, removed, modified } = await currentSynchronizer.checkForChanges();
-        const totalChanges = added.length + removed.length + modified.length;
-
-        if (totalChanges === 0) {
-            progressCallback?.({ phase: 'No changes detected', current: 100, total: 100, percentage: 100 });
-            console.log('✅ No file changes detected.');
+        // Early return if already reindexing
+        if (this.reindexingInProgress) {
+            console.warn('Reindexing already in progress, skipping this request');
             return { added: 0, removed: 0, modified: 0 };
         }
 
-        console.log(`🔄 Found changes: ${added.length} added, ${removed.length} removed, ${modified.length} modified.`);
+        this.reindexingInProgress = true;
 
-        let processedChanges = 0;
-        const updateProgress = (phase: string) => {
-            processedChanges++;
-            const percentage = Math.round((processedChanges / (removed.length + modified.length + added.length)) * 100);
-            progressCallback?.({ phase, current: processedChanges, total: totalChanges, percentage });
-        };
+        try {
+            const collectionName = this.getCollectionName(codebasePath);
+            const synchronizer = this.synchronizers.get(collectionName);
 
-        // Handle removed files
-        for (const file of removed) {
-            await this.deleteFileChunks(collectionName, file);
-            updateProgress(`Removed ${file}`);
+            if (!synchronizer) {
+                // Load project-specific ignore patterns before creating FileSynchronizer
+                await this.loadIgnorePatterns(codebasePath);
+
+                // To be safe, let's initialize if it's not there.
+                const newSynchronizer = new FileSynchronizer(codebasePath, this.ignorePatterns);
+                await newSynchronizer.initialize();
+                this.synchronizers.set(collectionName, newSynchronizer);
+            }
+
+            const currentSynchronizer = this.synchronizers.get(collectionName)!;
+
+            progressCallback?.({ phase: 'Checking for file changes...', current: 0, total: 100, percentage: 0 });
+            const { added, removed, modified } = await currentSynchronizer.checkForChanges();
+            const totalChanges = added.length + removed.length + modified.length;
+
+            if (totalChanges === 0) {
+                progressCallback?.({ phase: 'No changes detected', current: 100, total: 100, percentage: 100 });
+                console.log('✅ No file changes detected.');
+                return { added: 0, removed: 0, modified: 0 };
+            }
+
+            console.log(`🔄 Found changes: ${added.length} added, ${removed.length} removed, ${modified.length} modified.`);
+
+            let processedChanges = 0;
+            const updateProgress = (phase: string) => {
+                processedChanges++;
+                const percentage = Math.round((processedChanges / (removed.length + modified.length + added.length)) * 100);
+                progressCallback?.({ phase, current: processedChanges, total: totalChanges, percentage });
+            };
+
+            // Handle removed files
+            for (const file of removed) {
+                await this.deleteFileChunks(collectionName, file);
+                updateProgress(`Removed ${file}`);
+            }
+
+            // Handle modified files
+            for (const file of modified) {
+                await this.deleteFileChunks(collectionName, file);
+                updateProgress(`Deleted old chunks for ${file}`);
+            }
+
+            // Handle added and modified files
+            const filesToIndex = [...added, ...modified].map(f => path.join(codebasePath, f));
+
+            if (filesToIndex.length > 0) {
+                await this.processFileList(
+                    filesToIndex,
+                    codebasePath,
+                    (filePath, fileIndex, totalFiles) => {
+                        updateProgress(`Indexed ${filePath} (${fileIndex}/${totalFiles})`);
+                    }
+                );
+            }
+
+            console.log(`✅ Re-indexing complete. Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
+            // Emit notification for MCP clients
+            console.log(`📢 NOTIFICATION: Auto-reindexing completed - Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
+            progressCallback?.({ phase: 'Re-indexing complete!', current: totalChanges, total: totalChanges, percentage: 100 });
+
+            return { added: added.length, removed: removed.length, modified: modified.length };
+        } finally {
+            this.reindexingInProgress = false;
         }
-
-        // Handle modified files
-        for (const file of modified) {
-            await this.deleteFileChunks(collectionName, file);
-            updateProgress(`Deleted old chunks for ${file}`);
-        }
-
-        // Handle added and modified files
-        const filesToIndex = [...added, ...modified].map(f => path.join(codebasePath, f));
-
-        if (filesToIndex.length > 0) {
-            await this.processFileList(
-                filesToIndex,
-                codebasePath,
-                (filePath, fileIndex, totalFiles) => {
-                    updateProgress(`Indexed ${filePath} (${fileIndex}/${totalFiles})`);
-                }
-            );
-        }
-
-        console.log(`✅ Re-indexing complete. Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
-        progressCallback?.({ phase: 'Re-indexing complete!', current: totalChanges, total: totalChanges, percentage: 100 });
-
-        return { added: added.length, removed: removed.length, modified: modified.length };
     }
 
     private async deleteFileChunks(collectionName: string, relativePath: string): Promise<void> {
@@ -1130,7 +1154,7 @@ export class Context {
         try {
             const content = await fs.promises.readFile(filePath, 'utf-8');
             return content
-                .split('\n')
+                .split(/\r?\n/)
                 .map(line => line.trim())
                 .filter(line => line && !line.startsWith('#')); // Filter out empty lines and comments
         } catch (error) {
@@ -1434,5 +1458,120 @@ export class Context {
                 reason: 'Using LangChain splitter directly'
             };
         }
+    }
+
+    /**
+     * Start watching for file changes in a codebase
+     * @param codebasePath Path to the codebase to watch
+     * @param onChangeCallback Optional callback to handle file changes
+     * @param debounceMs Optional debounce delay in milliseconds (default: 2000)
+     */
+    async startWatching(codebasePath: string, onChangeCallback?: FileChangeCallback, debounceMs: number = 2000): Promise<void> {
+        if (this.fileWatcher && this.fileWatcher.isWatching()) {
+            console.warn('File watcher is already running. Stop it first before starting a new one.');
+            return;
+        }
+
+        try {
+            console.log(`👀 Starting file watcher for ${codebasePath}`);
+
+            // Create the file watcher with the codebase path and ignore patterns
+            this.fileWatcher = new ChokidarFileWatcher(codebasePath, {
+                paths: codebasePath,
+                debounceMs,
+                recursive: true,
+                ignoreInitial: true,
+                ignored: this.createIgnorePatternMatcher(),
+                watchFile: true,
+                watchDirectory: false
+            });
+
+            // Set up the change callback
+            if (onChangeCallback) {
+                this.fileWatcher.onChange(onChangeCallback);
+            } else {
+                // Default callback: reindex changed files
+                this.fileWatcher.onChange(async (changedFiles: Set<string>, _events: FileChangeEvent[]) => {
+                    console.log(`📝 Detected ${changedFiles.size} file changes`);
+                    changedFiles.forEach(file => {
+                        console.log(`  - ${file}`);
+                    });
+
+                    // Trigger reindexing for the changed files
+                    try {
+                        await this.reindexByChange(codebasePath);
+                        console.log('✅ Auto reindexing completed');
+                    } catch (error) {
+                        console.error('❌ Error during auto reindexing:', error);
+                    }
+                });
+            }
+
+            // Set up error callback
+            this.fileWatcher.onError((error: Error) => {
+                console.error('File watcher error:', error);
+            });
+
+            // Start the watcher
+            await this.fileWatcher.start();
+            console.log('✅ File watcher started successfully');
+        } catch (error) {
+            console.error('Failed to start file watcher:', error);
+            this.fileWatcher = null;
+            throw error;
+        }
+    }
+
+    /**
+     * Stop watching for file changes
+     */
+    async stopWatching(): Promise<void> {
+        if (!this.fileWatcher || !this.fileWatcher.isWatching()) {
+            console.warn('File watcher is not running');
+            return;
+        }
+
+        try {
+            console.log('🛑 Stopping file watcher');
+            await this.fileWatcher.stop();
+            this.fileWatcher = null;
+            console.log('✅ File watcher stopped successfully');
+        } catch (error) {
+            console.error('Failed to stop file watcher:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Check if the file watcher is currently running
+     */
+    isWatching(): boolean {
+        return this.fileWatcher !== null && this.fileWatcher.isWatching();
+    }
+
+    /**
+     * Get file watcher statistics
+     */
+    getWatcherStats(): { watchedFiles: number; totalEvents: number; processedEvents: number; errors: number; startedAt: number } | null {
+        if (!this.fileWatcher) {
+            return null;
+        }
+        return this.fileWatcher.getStats();
+    }
+
+    /**
+     * Create an ignore pattern matcher function for the file watcher
+     * @returns Function that returns true if a path should be ignored
+     */
+    private createIgnorePatternMatcher(): (path: string) => boolean {
+        return (path: string) => {
+            const normalizedPath = path.replace(/\\/g, '/'); // Normalize path separators
+            for (const pattern of this.ignorePatterns) {
+                if (this.isPatternMatch(normalizedPath, pattern)) {
+                    return true;
+                }
+            }
+            return false;
+        };
     }
 }

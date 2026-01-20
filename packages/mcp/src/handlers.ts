@@ -3,18 +3,25 @@ import { Context, COLLECTION_LIMIT_MESSAGE } from "@dexus1985/claude-context-cor
 import { SnapshotManager } from "./snapshot.js";
 import { ensureAbsolutePath, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
+import { ContextMcpConfig } from "./config.js";
 
 export class ToolHandlers {
     private context: Context;
     private snapshotManager: SnapshotManager;
     private indexingStats: { indexedFiles: number; totalChunks: number } | null = null;
     private currentWorkspace: string;
+    private config: ContextMcpConfig;
 
-    constructor(context: Context, snapshotManager: SnapshotManager) {
+    constructor(context: Context, snapshotManager: SnapshotManager, config: ContextMcpConfig) {
         this.context = context;
         this.snapshotManager = snapshotManager;
+        this.config = config;
         this.currentWorkspace = process.cwd();
         console.log(`[WORKSPACE] Current workspace: ${this.currentWorkspace}`);
+        console.log(`[WORKSPACE] File watching enabled: ${this.config.enableFileWatcher}`);
+        if (this.config.enableFileWatcher) {
+            console.log(`[WORKSPACE] File watch debounce: ${this.config.fileWatchDebounceMs}ms`);
+        }
     }
 
     /**
@@ -500,6 +507,24 @@ export class ToolHandlers {
             // Save snapshot after updating codebase lists
             this.snapshotManager.saveCodebaseSnapshot();
 
+            // Start file watcher if enabled in configuration
+            if (this.config.enableFileWatcher) {
+                try {
+                    console.log(`[BACKGROUND-INDEX] 👀 Starting file watcher for indexed codebase: ${absolutePath}`);
+                    await this.context.startWatching(
+                        absolutePath,
+                        undefined, // Use default callback (auto reindex)
+                        this.config.fileWatchDebounceMs || 1000
+                    );
+                    console.log(`[BACKGROUND-INDEX] ✅ File watcher started successfully for: ${absolutePath}`);
+                } catch (watcherError: any) {
+                    console.error(`[BACKGROUND-INDEX] ⚠️  Failed to start file watcher for ${absolutePath}:`, watcherError.message || watcherError);
+                    // Don't fail indexing if file watcher fails to start
+                }
+            } else {
+                console.log(`[BACKGROUND-INDEX] ℹ️  File watching is disabled, skipping file watcher start for: ${absolutePath}`);
+            }
+
             let message = `Background indexing completed for '${absolutePath}' using ${splitterType.toUpperCase()} splitter.\nIndexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks.`;
             if (stats.status === 'limit_reached') {
                 message += `\n⚠️  Warning: Indexing stopped because the chunk limit (450,000) was reached. The index may be incomplete.`;
@@ -755,6 +780,15 @@ export class ToolHandlers {
 
             console.log(`[CLEAR] Clearing codebase: ${absolutePath}`);
 
+            // Stop file watcher if it's running
+            try {
+                await this.context.stopWatching();
+                console.log(`[CLEAR] Stopped file watcher for: ${absolutePath}`);
+            } catch (watcherError: any) {
+                console.warn(`[CLEAR] Failed to stop file watcher for ${absolutePath}:`, watcherError.message || watcherError);
+                // Continue with clearing even if stopping watcher fails
+            }
+
             try {
                 await this.context.clearIndex(absolutePath);
                 console.log(`[CLEAR] Successfully cleared index for: ${absolutePath}`);
@@ -882,6 +916,253 @@ export class ToolHandlers {
                 content: [{
                     type: "text",
                     text: `Error getting indexing status: ${error.message || error}`
+                }],
+                isError: true
+            };
+        }
+    }
+
+    public async handleGetWatchingStatus(args: any) {
+        const { path: codebasePath } = args;
+
+        try {
+            // Force absolute path resolution
+            const absolutePath = ensureAbsolutePath(codebasePath);
+
+            // Validate path exists
+            if (!fs.existsSync(absolutePath)) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error: Path '${absolutePath}' does not exist. Original input: '${codebasePath}'`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check if it's a directory
+            const stat = fs.statSync(absolutePath);
+            if (!stat.isDirectory()) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error: Path '${absolutePath}' is not a directory`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check if file watching is enabled in config
+            if (!this.config.enableFileWatcher) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `File watching is disabled in the MCP server configuration. Enable it by setting ENABLE_FILE_WATCHER=true in your environment.`
+                    }]
+                };
+            }
+
+            // Check if this codebase is indexed
+            const isIndexed = this.snapshotManager.getIndexedCodebases().includes(absolutePath);
+            if (!isIndexed) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Codebase '${absolutePath}' is not indexed. File watching is only available for indexed codebases.`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check watching status
+            const isWatching = this.context.isWatching();
+            const stats = this.context.getWatcherStats();
+
+            let statusMessage = '';
+            if (isWatching) {
+                statusMessage = `✅ Codebase '${absolutePath}' is being watched for file changes.`;
+                if (stats) {
+                    const startTime = new Date(stats.startedAt).toLocaleString();
+                    statusMessage += `\n\n📊 **File Watcher Statistics:**`;
+                    statusMessage += `\n- Watched files: ${stats.watchedFiles}`;
+                    statusMessage += `\n- Total events detected: ${stats.totalEvents}`;
+                    statusMessage += `\n- Processed events: ${stats.processedEvents}`;
+                    statusMessage += `\n- Errors: ${stats.errors}`;
+                    statusMessage += `\n- Started at: ${startTime}`;
+                }
+            } else {
+                statusMessage = `ℹ️  Codebase '${absolutePath}' is not being watched for file changes.`;
+                statusMessage += `\n\nFile watching can be started automatically when indexing completes (if enabled in config) or manually using the start_watching tool.`;
+            }
+
+            const pathInfo = codebasePath !== absolutePath
+                ? `\n\nNote: Input path '${codebasePath}' was resolved to absolute path '${absolutePath}'`
+                : '';
+
+            return {
+                content: [{
+                    type: "text",
+                    text: statusMessage + pathInfo
+                }]
+            };
+
+        } catch (error: any) {
+            return {
+                content: [{
+                    type: "text",
+                    text: `Error getting watching status: ${error.message || error}`
+                }],
+                isError: true
+            };
+        }
+    }
+
+    public async handleStartWatching(args: any) {
+        const { path: codebasePath, debounceMs } = args;
+
+        try {
+            // Force absolute path resolution
+            const absolutePath = ensureAbsolutePath(codebasePath);
+
+            // Validate path exists
+            if (!fs.existsSync(absolutePath)) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error: Path '${absolutePath}' does not exist. Original input: '${codebasePath}'`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check if it's a directory
+            const stat = fs.statSync(absolutePath);
+            if (!stat.isDirectory()) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error: Path '${absolutePath}' is not a directory`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check if file watching is enabled in config
+            if (!this.config.enableFileWatcher) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `File watching is disabled in the MCP server configuration. Enable it by setting ENABLE_FILE_WATCHER=true in your environment.`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check if already watching
+            if (this.context.isWatching()) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `File watcher is already running. Stop it first before starting a new one using the stop_watching tool.`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Check if this codebase is indexed
+            const isIndexed = this.snapshotManager.getIndexedCodebases().includes(absolutePath);
+            if (!isIndexed) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Codebase '${absolutePath}' is not indexed. File watching is only available for indexed codebases. Please index it first using the index_codebase tool.`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Parse debounce_ms parameter
+            const debounce = debounceMs !== undefined ? parseInt(debounceMs.toString(), 10) : (this.config.fileWatchDebounceMs || 2000);
+            if (isNaN(debounce) || debounce < 0) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error: Invalid debounce_ms value '${debounceMs}'. Must be a positive number.`
+                    }],
+                    isError: true
+                };
+            }
+
+            // Start watching
+            console.log(`[WATCHING] Starting file watcher for: ${absolutePath} (debounce: ${debounce}ms)`);
+            await this.context.startWatching(
+                absolutePath,
+                undefined, // Use default callback (auto reindex)
+                debounce
+            );
+            console.log(`[WATCHING] File watcher started for: ${absolutePath}`);
+
+            const pathInfo = codebasePath !== absolutePath
+                ? `\nNote: Input path '${codebasePath}' was resolved to absolute path '${absolutePath}'`
+                : '';
+
+            return {
+                content: [{
+                    type: "text",
+                    text: `✅ File watcher started for codebase '${absolutePath}'.\n\nThe codebase will be automatically re-indexed when files change. Changes are debounced by ${debounce}ms to batch rapid edits.${pathInfo}`
+                }]
+            };
+
+        } catch (error: any) {
+            return {
+                content: [{
+                    type: "text",
+                    text: `Error starting file watcher: ${error.message || error}`
+                }],
+                isError: true
+            };
+        }
+    }
+
+    public async handleStopWatching(_args: unknown) {
+        try {
+            // Check if file watching is enabled in config
+            if (!this.config.enableFileWatcher) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `File watching is disabled in the MCP server configuration.`
+                    }]
+                };
+            }
+
+            // Check if watching
+            if (!this.context.isWatching()) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `File watcher is not currently running.`
+                    }]
+                };
+            }
+
+            // Stop watching
+            console.log(`[WATCHING] Stopping file watcher`);
+            await this.context.stopWatching();
+            console.log(`[WATCHING] File watcher stopped`);
+
+            return {
+                content: [{
+                    type: "text",
+                    text: `✅ File watcher stopped successfully.\n\nThe codebase will no longer be automatically re-indexed when files change. You can start watching again using the start_watching tool.`
+                }]
+            };
+
+        } catch (error: any) {
+            return {
+                content: [{
+                    type: "text",
+                    text: `Error stopping file watcher: ${error.message || error}`
                 }],
                 isError: true
             };
