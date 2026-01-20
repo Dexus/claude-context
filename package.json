@@ -51,9 +51,12 @@
             "@derekstride/tree-sitter-sql",
             "@tree-sitter-grammars/tree-sitter-hcl",
             "@tree-sitter-grammars/tree-sitter-yaml",
+            "esbuild",
+            "protobufjs",
             "tree-sitter",
             "tree-sitter-c",
             "tree-sitter-c-sharp",
+            "tree-sitter-cli",
             "tree-sitter-cpp",
             "tree-sitter-dart",
             "tree-sitter-go",
@@ -61,10 +64,13 @@
             "tree-sitter-javascript",
             "tree-sitter-python",
             "tree-sitter-rust",
-            "tree-sitter-typescript"
+            "tree-sitter-typescript",
+            "unrs-resolver"
         ],
         "peerDependencyRules": {
-            "ignoreMissing": ["tree-sitter"]
+            "ignoreMissing": [
+                "tree-sitter"
+            ]
         }
     }
 }
