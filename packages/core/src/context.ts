@@ -421,6 +421,8 @@ export class Context {
         }
 
         console.log(`✅ Re-indexing complete. Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
+        // Emit notification for MCP clients
+        console.log(`📢 NOTIFICATION: Auto-reindexing completed - Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
         progressCallback?.({ phase: 'Re-indexing complete!', current: totalChanges, total: totalChanges, percentage: 100 });
 
         return { added: added.length, removed: removed.length, modified: modified.length };
