@@ -52,7 +52,7 @@ export function buildExtensionFilterExpression(extensionFilter?: any[]): { filte
 
     const quoted = cleaned.map((e: string) => `'${e}'`).join(', ');
     return {
-        filterExpr: `fileExtension in [${quoted}]`
+        filterExpr: `"fileExtension" in [${quoted}]`
     };
 }
 
