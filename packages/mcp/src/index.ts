@@ -40,8 +40,11 @@ class ContextMcpServer {
     private snapshotManager: SnapshotManager;
     private syncManager: SyncManager;
     private toolHandlers: ToolHandlers;
+    private config: ContextMcpConfig;
 
     constructor(config: ContextMcpConfig) {
+        // Store config for later use
+        this.config = config;
         // Initialize MCP server
         this.server = new Server(
             {
@@ -83,6 +86,44 @@ class ContextMcpServer {
         this.snapshotManager.loadCodebaseSnapshot();
 
         this.setupTools();
+    }
+
+    private async initializeFileWatchers(): Promise<void> {
+        // Only initialize file watcher if enabled in config
+        if (!this.config.enableFileWatcher) {
+            console.log('[FILEWATCHER] File watching is disabled in configuration');
+            return;
+        }
+
+        console.log('[FILEWATCHER] Initializing file watchers for indexed codebases...');
+
+        // Get list of indexed codebases from snapshot
+        const indexedCodebases = this.snapshotManager.getIndexedCodebases();
+
+        if (indexedCodebases.length === 0) {
+            console.log('[FILEWATCHER] No indexed codebases found, skipping file watcher initialization');
+            return;
+        }
+
+        console.log(`[FILEWATCHER] Found ${indexedCodebases.length} indexed codebase(s)`);
+
+        // Start file watcher for each indexed codebase
+        for (const codebasePath of indexedCodebases) {
+            try {
+                console.log(`[FILEWATCHER] Starting file watcher for: ${codebasePath}`);
+                await this.context.startWatching(
+                    codebasePath,
+                    undefined, // Use default callback (auto reindex)
+                    this.config.fileWatchDebounceMs || 1000
+                );
+                console.log(`[FILEWATCHER] ✓ File watcher started for: ${codebasePath}`);
+            } catch (error) {
+                console.error(`[FILEWATCHER] ✗ Failed to start file watcher for ${codebasePath}:`, error);
+                // Continue with other codebases even if one fails
+            }
+        }
+
+        console.log('[FILEWATCHER] File watcher initialization complete');
     }
 
     private setupTools() {
@@ -340,6 +381,10 @@ Use **search_code** for simple, direct queries with known terminology:
         // Start background sync after server is connected
         console.log('[SYNC-DEBUG] Initializing background sync...');
         this.syncManager.startBackgroundSync();
+
+        // Initialize file watchers for indexed codebases
+        await this.initializeFileWatchers();
+
         console.log('[SYNC-DEBUG] MCP server initialization complete');
     }
 }
