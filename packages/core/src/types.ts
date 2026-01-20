@@ -1,3 +1,5 @@
+import type { RankingFactors } from './ranking/types';
+
 export interface SearchQuery {
     term: string;
     includeContent?: boolean;
@@ -11,6 +13,13 @@ export interface SemanticSearchResult {
     endLine: number;
     language: string;
     score: number;
+    /** Detailed breakdown of ranking factors (optional, useful for debugging and A/B testing) */
+    rankingDetails?: {
+        /** Individual factor scores */
+        factors: RankingFactors;
+        /** Final combined score after applying weights */
+        finalScore: number;
+    };
 }
 
 export type AgentSearchStrategy = 'iterative' | 'breadth-first' | 'focused';
