@@ -21,6 +21,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { FileSynchronizer } from './sync/synchronizer';
+import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
@@ -107,6 +108,8 @@ export class Context {
     private supportedExtensions: string[];
     private ignorePatterns: string[];
     private synchronizers = new Map<string, FileSynchronizer>();
+    private importAnalyzer: ImportAnalyzer;
+    private importFrequencyMap: ImportFrequency;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -122,6 +125,10 @@ export class Context {
         this.vectorDatabase = config.vectorDatabase;
 
         this.codeSplitter = config.codeSplitter || new AstCodeSplitter(2500, 300);
+
+        // Initialize import analyzer
+        this.importAnalyzer = new ImportAnalyzer();
+        this.importFrequencyMap = {};
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -711,6 +718,9 @@ export class Context {
         const CHUNK_LIMIT = 450000;
         console.log(`🔧 Using EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE}`);
 
+        // Reset import analyzer for this indexing operation
+        this.importAnalyzer.reset();
+
         let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }> = [];
         let processedFiles = 0;
         let totalChunks = 0;
@@ -724,6 +734,13 @@ export class Context {
                 const mtime = stats.mtimeMs;
                 const content = await fs.promises.readFile(filePath, 'utf-8');
                 const language = this.getLanguageFromFilePath(filePath);
+
+                // Analyze imports for this file
+                const relativePath = path.relative(codebasePath, filePath);
+                if (ImportAnalyzer.isLanguageSupported(language)) {
+                    this.importAnalyzer.analyzeFile(content, language, relativePath);
+                }
+
                 const chunks = await this.codeSplitter.split(content, language, filePath);
 
                 // Log files with many chunks or large content
@@ -787,6 +804,11 @@ export class Context {
             }
         }
 
+        // Build import graph after all files are analyzed
+        const importGraph = this.importAnalyzer.buildImportGraph();
+        this.importFrequencyMap = importGraph.frequency;
+        console.log(`📊 Import analysis complete: ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files`);
+
         return {
             processedFiles,
             totalChunks,
@@ -837,6 +859,9 @@ export class Context {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { filePath: _fp, startLine: _sl, endLine: _el, ...restMetadata } = chunk.metadata;
 
+                // Get import count for this file
+                const importCount = this.importFrequencyMap[relativePath] || 0;
+
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
                     content: chunk.content, // Full text content for BM25 and storage
@@ -850,7 +875,8 @@ export class Context {
                         ...restMetadata,
                         codebasePath,
                         language: chunk.metadata.language || 'unknown',
-                        chunkIndex: index
+                        chunkIndex: index,
+                        importCount
                     }
                 };
             });
@@ -870,6 +896,9 @@ export class Context {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { filePath: _fp2, startLine: _sl2, endLine: _el2, ...restMetadata } = chunk.metadata;
 
+                // Get import count for this file
+                const importCount = this.importFrequencyMap[relativePath] || 0;
+
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
                     vector: embeddings[index].vector,
@@ -883,7 +912,8 @@ export class Context {
                         ...restMetadata,
                         codebasePath,
                         language: chunk.metadata.language || 'unknown',
-                        chunkIndex: index
+                        chunkIndex: index,
+                        importCount
                     }
                 };
             });
