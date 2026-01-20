@@ -27,4 +27,31 @@ export function ensureAbsolutePath(inputPath: string): string {
 export function trackCodebasePath(codebasePath: string): void {
     const absolutePath = ensureAbsolutePath(codebasePath);
     console.log(`[TRACKING] Tracked codebase path: ${absolutePath} (not marked as indexed)`);
-} 
+}
+
+/**
+ * Build filter expression from extensionFilter array
+ * Validates extensions and returns either a filter expression or an error
+ */
+export function buildExtensionFilterExpression(extensionFilter: any[]): { filterExpr?: string; error?: string } {
+    if (!Array.isArray(extensionFilter) || extensionFilter.length === 0) {
+        return {};
+    }
+
+    const cleaned = extensionFilter
+        .filter((v: any) => typeof v === 'string')
+        .map((v: string) => v.trim())
+        .filter((v: string) => v.length > 0);
+
+    const invalid = cleaned.filter((e: string) => !(e.startsWith('.') && e.length > 1 && !/\s/.test(e)));
+    if (invalid.length > 0) {
+        return {
+            error: `Error: Invalid file extensions in extensionFilter: ${JSON.stringify(invalid)}. Use proper extensions like '.ts', '.py'.`
+        };
+    }
+
+    const quoted = cleaned.map((e: string) => `'${e}'`).join(', ');
+    return {
+        filterExpr: `fileExtension in [${quoted}]`
+    };
+}

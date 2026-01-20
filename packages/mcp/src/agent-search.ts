@@ -15,6 +15,34 @@ import { Context, AgentSearchStrategy, AgentSearchResult, AgentSearchStep, Seman
  * - focused: Deep dive into specific areas based on initial findings
  */
 export class AgentSearch {
+    // Search refinement thresholds
+    /** Minimum results needed to consider a search successful */
+    private static readonly MIN_RESULTS_FOR_GOOD_SEARCH = 10;
+    /** Score threshold to consider a result "high quality" */
+    private static readonly HIGH_SCORE_THRESHOLD = 0.8;
+    /** Number of high-quality results needed to stop refinement */
+    private static readonly HIGH_SCORE_COUNT_THRESHOLD = 5;
+    /** Few results threshold for triggering refinement */
+    private static readonly FEW_RESULTS_THRESHOLD = 3;
+    /** Results threshold for single-file diversity check */
+    private static readonly SINGLE_FILE_DIVERSITY_THRESHOLD = 5;
+    /** Low average score threshold for triggering refinement */
+    private static readonly LOW_AVERAGE_SCORE_THRESHOLD = 0.5;
+    /** Maximum refinement iterations before stopping */
+    private static readonly MAX_REFINEMENT_ITERATIONS = 2;
+
+    // Score aggregation constants
+    /** Boost factor per duplicate occurrence */
+    private static readonly DUPLICATE_BOOST_PER_OCCURRENCE = 0.05;
+    /** Maximum boost factor for duplicates (30% max boost) */
+    private static readonly MAX_DUPLICATE_BOOST_FACTOR = 1.3;
+    /** Line gap threshold for considering chunks as adjacent */
+    private static readonly ADJACENCY_LINE_GAP = 3;
+    /** Overlap penalty factor for score weighting */
+    private static readonly OVERLAP_PENALTY_FACTOR = 0.5;
+    /** Weight factor for adjacent (non-overlapping) chunks */
+    private static readonly ADJACENCY_WEIGHT = 0.7;
+
     private context: Context;
     private maxIterations: number;
     private currentIteration: number;
@@ -76,11 +104,11 @@ export class AgentSearch {
             completed = false;
         }
 
-        // Combine and deduplicate results (will be enhanced in subtask-1-4)
+        // Combine and deduplicate results
         const combinedResults = this.combineResults();
 
-        // Generate summary
-        const summary = this.generateSummary(query, strategy, completed);
+        // Generate summary (pass combined results count to avoid redundant computation)
+        const summary = this.generateSummary(query, strategy, completed, combinedResults.length);
 
         console.log(`[AGENT-SEARCH] ✅ Search completed: ${this.steps.length} steps, ${combinedResults.length} unique results`);
 
@@ -130,11 +158,11 @@ export class AgentSearch {
             // Record step
             this.recordStep(currentQuery, explanation, results);
 
-            // Check if we should continue (will be enhanced in subtask-1-3)
+            // Check if we should continue
             shouldContinue = this.shouldRefineSearch(results);
 
             if (shouldContinue && this.currentIteration < this.maxIterations) {
-                // Generate refined query (will be enhanced in subtask-1-3)
+                // Generate refined query
                 currentQuery = this.generateRefinedQuery(query, results);
                 console.log(`[AGENT-SEARCH] 🎯 Refining search to: "${currentQuery}"`);
             }
@@ -160,9 +188,12 @@ export class AgentSearch {
     ): Promise<boolean> {
         console.log(`[AGENT-SEARCH] 🌊 Executing breadth-first search strategy`);
 
-        // Generate related queries (will be enhanced in subtask-1-3)
+        // Generate related queries
         const relatedQueries = this.generateRelatedQueries(query);
         console.log(`[AGENT-SEARCH] 📋 Generated ${relatedQueries.length} related queries`);
+
+        // Calculate the actual limit for progress display
+        const effectiveLimit = Math.min(relatedQueries.length, this.maxIterations);
 
         // Search each query (respecting iteration limit)
         for (const relatedQuery of relatedQueries) {
@@ -173,7 +204,7 @@ export class AgentSearch {
 
             this.currentIteration++;
 
-            const explanation = `Breadth-first exploration (${this.currentIteration}/${relatedQueries.length}): "${relatedQuery}"`;
+            const explanation = `Breadth-first exploration (${this.currentIteration}/${effectiveLimit}): "${relatedQuery}"`;
             console.log(`[AGENT-SEARCH] 📍 Step ${this.currentIteration}: ${explanation}`);
 
             const results = await this.performSearch(
@@ -215,7 +246,7 @@ export class AgentSearch {
 
         this.recordStep(query, explanation, initialResults);
 
-        // If we have results, perform focused deep dives (will be enhanced in subtask-1-3)
+        // If we have results, perform focused deep dives
         if (initialResults.length > 0 && this.currentIteration < this.maxIterations) {
             const focusAreas = this.identifyFocusAreas(initialResults);
             console.log(`[AGENT-SEARCH] 🔍 Identified ${focusAreas.length} focus areas for deep dive`);
@@ -304,16 +335,16 @@ export class AgentSearch {
         }
 
         // Too many results with high scores - we found what we need
-        if (results.length >= 10) {
-            const highScoreCount = results.filter(r => r.score > 0.8).length;
-            if (highScoreCount >= 5) {
+        if (results.length >= AgentSearch.MIN_RESULTS_FOR_GOOD_SEARCH) {
+            const highScoreCount = results.filter(r => r.score > AgentSearch.HIGH_SCORE_THRESHOLD).length;
+            if (highScoreCount >= AgentSearch.HIGH_SCORE_COUNT_THRESHOLD) {
                 console.log(`[AGENT-SEARCH] 🛑 Found ${highScoreCount} high-quality results, stopping refinement`);
                 return false;
             }
         }
 
         // Very few results - might benefit from refinement
-        if (results.length < 3 && this.currentIteration === 1) {
+        if (results.length < AgentSearch.FEW_RESULTS_THRESHOLD && this.currentIteration === 1) {
             console.log(`[AGENT-SEARCH] 🔄 Only ${results.length} results, will try refinement`);
             return true;
         }
@@ -321,7 +352,7 @@ export class AgentSearch {
         // Check result diversity - if all results are from same file, try to diversify
         if (results.length > 0 && this.currentIteration === 1) {
             const uniqueFiles = new Set(results.map(r => r.relativePath));
-            if (uniqueFiles.size === 1 && results.length < 5) {
+            if (uniqueFiles.size === 1 && results.length < AgentSearch.SINGLE_FILE_DIVERSITY_THRESHOLD) {
                 console.log(`[AGENT-SEARCH] 🔄 All results from same file, will try to diversify`);
                 return true;
             }
@@ -330,14 +361,14 @@ export class AgentSearch {
         // Low average score - results might not be relevant enough
         if (results.length > 0) {
             const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
-            if (avgScore < 0.5 && this.currentIteration < 2) {
+            if (avgScore < AgentSearch.LOW_AVERAGE_SCORE_THRESHOLD && this.currentIteration < AgentSearch.MAX_REFINEMENT_ITERATIONS) {
                 console.log(`[AGENT-SEARCH] 🔄 Low average score (${avgScore.toFixed(2)}), will try refinement`);
                 return true;
             }
         }
 
         // Limit refinement iterations to prevent excessive searches
-        if (this.currentIteration >= 2) {
+        if (this.currentIteration >= AgentSearch.MAX_REFINEMENT_ITERATIONS) {
             console.log(`[AGENT-SEARCH] 🛑 Already refined ${this.currentIteration} times, stopping`);
             return false;
         }
@@ -382,7 +413,7 @@ export class AgentSearch {
             const fileName = result.relativePath.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
 
             // Extract camelCase/PascalCase words from file name
-            const words = fileName.split(/[_\-\/]|(?=[A-Z])/).filter(w => w.length > 2);
+            const words = fileName.split(/[_\-/]|(?=[A-Z])/).filter(w => w.length > 2);
             words.forEach(w => terms.add(w.toLowerCase()));
 
             // Extract significant words from code content (if available)
@@ -665,27 +696,41 @@ export class AgentSearch {
             if (current.startLine === next.startLine && current.endLine === next.endLine) {
                 // Aggregate scores - take max but boost for multiple occurrences
                 const maxScore = Math.max(current.score, next.score);
-                const boostFactor = Math.min(1 + (occurrences * 0.05), 1.3); // Max 30% boost
+                const boostFactor = Math.min(
+                    1 + (occurrences * AgentSearch.DUPLICATE_BOOST_PER_OCCURRENCE),
+                    AgentSearch.MAX_DUPLICATE_BOOST_FACTOR
+                );
                 current.score = Math.min(maxScore * boostFactor, 1.0);
                 occurrences++;
                 console.log(`[AGENT-SEARCH] 🔗 Duplicate found at ${filePath}:${current.startLine}-${current.endLine}, boosted score to ${current.score.toFixed(3)}`);
                 continue;
             }
 
-            // Check for overlap or adjacency (within 3 lines)
+            // Check for overlap or adjacency (within configured line gap)
             const isOverlapping = next.startLine <= current.endLine;
-            const isAdjacent = next.startLine <= current.endLine + 3;
+            const isAdjacent = next.startLine <= current.endLine + AgentSearch.ADJACENCY_LINE_GAP;
 
             if (isOverlapping || isAdjacent) {
                 // Merge the chunks - extend the range and take best content
                 const oldEnd = current.endLine;
                 current.endLine = Math.max(current.endLine, next.endLine);
 
-                // Weighted score based on overlap
-                const overlapRatio = isOverlapping
-                    ? (Math.min(current.endLine, next.endLine) - next.startLine) / (next.endLine - next.startLine)
-                    : 0;
-                const weight = isOverlapping ? (1 - overlapRatio * 0.5) : 0.7; // Less weight for overlaps
+                // Calculate weighted score based on overlap
+                let weight: number;
+                if (isOverlapping) {
+                    // Calculate overlap ratio, guarding against division by zero for single-line chunks
+                    const denominator = next.endLine - next.startLine;
+                    const overlapAmount = Math.min(current.endLine, next.endLine) - next.startLine;
+                    // Only calculate ratio if there's a valid range and actual overlap
+                    const overlapRatio = denominator > 0 && overlapAmount > 0
+                        ? Math.min(overlapAmount / denominator, 1.0)  // Clamp to [0, 1]
+                        : (denominator === 0 ? 1.0 : 0);  // Single-line chunk: full overlap if same line
+                    weight = 1 - overlapRatio * AgentSearch.OVERLAP_PENALTY_FACTOR;
+                } else {
+                    // Adjacent but not overlapping - use adjacency weight
+                    weight = AgentSearch.ADJACENCY_WEIGHT;
+                }
+
                 current.score = (current.score + next.score * weight) / (1 + weight);
 
                 // Prefer longer content or combine if significantly different
@@ -716,8 +761,12 @@ export class AgentSearch {
 
     /**
      * Generate a human-readable summary of the search
+     * @param query Original search query
+     * @param strategy Search strategy used
+     * @param completed Whether search completed naturally or hit iteration limit
+     * @param uniqueResultCount Number of unique results (passed to avoid redundant computation)
      */
-    private generateSummary(query: string, strategy: AgentSearchStrategy, completed: boolean): string {
+    private generateSummary(query: string, strategy: AgentSearchStrategy, completed: boolean, uniqueResultCount: number): string {
         const lines: string[] = [];
 
         lines.push(`🤖 Agent Search Summary`);
@@ -725,7 +774,7 @@ export class AgentSearch {
         lines.push(`📝 Original Query: "${query}"`);
         lines.push(`🎯 Strategy: ${strategy}`);
         lines.push(`🔢 Total Steps: ${this.steps.length}`);
-        lines.push(`📊 Unique Results: ${this.combineResults().length}`);
+        lines.push(`📊 Unique Results: ${uniqueResultCount}`);
         lines.push(`✅ Completed: ${completed ? 'Yes' : 'No (reached iteration limit)'}`);
         lines.push('');
 

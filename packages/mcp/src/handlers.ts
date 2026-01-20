@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Context, COLLECTION_LIMIT_MESSAGE } from "@dannyboy2042/claude-context-core";
 import { SnapshotManager } from "./snapshot.js";
-import { ensureAbsolutePath, truncateContent, trackCodebasePath } from "./utils.js";
+import { ensureAbsolutePath, truncateContent, trackCodebasePath, buildExtensionFilterExpression } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
 
 export class ToolHandlers {
@@ -23,7 +23,7 @@ export class ToolHandlers {
      * This method fetches all collections from the vector database,
      * gets the first document from each collection to extract codebasePath from metadata,
      * and updates the snapshot with discovered codebases.
-     * 
+     *
      * Logic: Compare mcp-codebase-snapshot.json with zilliz cloud collections
      * - If local snapshot has extra directories (not in cloud), remove them
      * - If local snapshot is missing directories (exist in cloud), ignore them
@@ -474,23 +474,15 @@ export class ToolHandlers {
             console.log(`[SEARCH] 🧠 Using embedding provider: ${embeddingProvider.getProvider()} for search`);
             console.log(`[SEARCH] 🔍 Generating embeddings for query using ${embeddingProvider.getProvider()}...`);
 
-            // Build filter expression from extensionFilter list
-            let filterExpr: string | undefined = undefined;
-            if (Array.isArray(extensionFilter) && extensionFilter.length > 0) {
-                const cleaned = extensionFilter
-                    .filter((v: any) => typeof v === 'string')
-                    .map((v: string) => v.trim())
-                    .filter((v: string) => v.length > 0);
-                const invalid = cleaned.filter((e: string) => !(e.startsWith('.') && e.length > 1 && !/\s/.test(e)));
-                if (invalid.length > 0) {
-                    return {
-                        content: [{ type: 'text', text: `Error: Invalid file extensions in extensionFilter: ${JSON.stringify(invalid)}. Use proper extensions like '.ts', '.py'.` }],
-                        isError: true
-                    };
-                }
-                const quoted = cleaned.map((e: string) => `'${e}'`).join(', ');
-                filterExpr = `fileExtension in [${quoted}]`;
+            // Build filter expression from extensionFilter list using shared utility
+            const filterResult = buildExtensionFilterExpression(extensionFilter);
+            if (filterResult.error) {
+                return {
+                    content: [{ type: 'text', text: filterResult.error }],
+                    isError: true
+                };
             }
+            const filterExpr = filterResult.filterExpr;
 
             // Search in the specified codebase
             const searchResults = await this.context.semanticSearch(
@@ -649,23 +641,15 @@ export class ToolHandlers {
             const embeddingProvider = this.context.getEmbedding();
             console.log(`[AGENT-SEARCH] 🧠 Using embedding provider: ${embeddingProvider.getProvider()} for search`);
 
-            // Build filter expression from extensionFilter list
-            let filterExpr: string | undefined = undefined;
-            if (Array.isArray(extensionFilter) && extensionFilter.length > 0) {
-                const cleaned = extensionFilter
-                    .filter((v: any) => typeof v === 'string')
-                    .map((v: string) => v.trim())
-                    .filter((v: string) => v.length > 0);
-                const invalid = cleaned.filter((e: string) => !(e.startsWith('.') && e.length > 1 && !/\s/.test(e)));
-                if (invalid.length > 0) {
-                    return {
-                        content: [{ type: 'text', text: `Error: Invalid file extensions in extensionFilter: ${JSON.stringify(invalid)}. Use proper extensions like '.ts', '.py'.` }],
-                        isError: true
-                    };
-                }
-                const quoted = cleaned.map((e: string) => `'${e}'`).join(', ');
-                filterExpr = `fileExtension in [${quoted}]`;
+            // Build filter expression from extensionFilter list using shared utility
+            const filterResult = buildExtensionFilterExpression(extensionFilter);
+            if (filterResult.error) {
+                return {
+                    content: [{ type: 'text', text: filterResult.error }],
+                    isError: true
+                };
             }
+            const filterExpr = filterResult.filterExpr;
 
             // Create and execute agent search
             const agentSearch = new AgentSearch(this.context, iterations);
@@ -937,4 +921,4 @@ export class ToolHandlers {
             };
         }
     }
-} 
+}
