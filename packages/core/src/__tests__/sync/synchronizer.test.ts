@@ -10,6 +10,10 @@ describe('FileSynchronizer', () => {
     let homeDir: string;
     let snapshotDir: string;
 
+    // Store original console methods
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+
     // Helper function to compute expected hash
     const computeHash = (data: string, algorithm: string = 'sha256'): string => {
         return crypto.createHash(algorithm).update(data).digest('hex');
@@ -26,10 +30,18 @@ describe('FileSynchronizer', () => {
         homeDir = os.homedir();
         snapshotDir = path.join(homeDir, '.context', 'merkle');
         tempDir = path.join(homeDir, 'test-project');
+
+        // Mock console to prevent mock-fs from breaking Jest's console
+        console.log = jest.fn();
+        console.error = jest.fn();
     });
 
     afterEach(() => {
         mockFs.restore();
+
+        // Restore console methods
+        console.log = originalConsoleLog;
+        console.error = originalConsoleError;
     });
 
     describe('constructor', () => {
