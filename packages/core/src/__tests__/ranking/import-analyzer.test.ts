@@ -1,4 +1,5 @@
-import { ImportAnalyzer, ImportInfo, ImportGraph } from '../../ranking/import-analyzer';
+import { ImportAnalyzer } from '../../ranking/import-analyzer';
+// ImportInfo and ImportGraph types are used implicitly through the analyzer methods
 
 describe('ImportAnalyzer', () => {
     let analyzer: ImportAnalyzer;
@@ -541,7 +542,7 @@ function hello() {
 /* import lodash from 'lodash'; */
 const x = 5;
 `;
-            const imports = analyzer.analyzeFile(code, 'javascript', 'test.js');
+            analyzer.analyzeFile(code, 'javascript', 'test.js');
 
             // Should not detect commented imports (though our simple regex might)
             // This is expected behavior - we're doing line-by-line analysis
@@ -555,15 +556,15 @@ import {
     baz
 } from 'module';
 `;
-            const imports = analyzer.analyzeFile(code, 'javascript', 'test.js');
+            const multilineImports = analyzer.analyzeFile(code, 'javascript', 'test.js');
 
             // Only the first line with 'from' should match
-            expect(imports.length).toBeGreaterThanOrEqual(0);
+            expect(multilineImports.length).toBeGreaterThanOrEqual(0);
         });
 
         it('should handle imports in strings', () => {
             const code = `const str = "import React from 'react'";`;
-            const imports = analyzer.analyzeFile(code, 'javascript', 'test.js');
+            analyzer.analyzeFile(code, 'javascript', 'test.js');
 
             // Our simple regex will match this - this is acceptable
             // for a basic import analyzer

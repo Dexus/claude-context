@@ -1,6 +1,6 @@
 import { ABTest, TestQuery, ABTestResult } from '../../ranking/ab-test';
 import { VectorSearchResult } from '../../vectordb/types';
-import { RankingConfig } from '../../ranking/types';
+// RankingConfig type is available via the ABTest module
 
 describe('ABTest', () => {
     /**

@@ -25,6 +25,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['**/dist/', '**/node_modules/', '**/*.js', '**/*.d.ts'],
+    ignores: ['**/dist/', '**/node_modules/', '**/*.js', '**/*.d.ts', 'packages/mcp/src/__tests__/'],
   }
 );

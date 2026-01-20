@@ -42,7 +42,7 @@ jest.mock('../splitter/langchain-splitter', () => ({
 // Mock OpenAI embedding to avoid API calls
 jest.mock('../embedding/openai-embedding', () => ({
     OpenAIEmbedding: class MockOpenAIEmbedding {
-        async embed(text: string) {
+        async embed(_text: string) {
             return { vector: Array(1536).fill(0.1), dimension: 1536 };
         }
         async embedBatch(texts: string[]) {

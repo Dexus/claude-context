@@ -206,9 +206,7 @@ describe('Ranker', () => {
 
             const ranked = ranker.rank(results, 'test', true);
 
-            // Find results by ID
-            const recentResult = ranked.find(r => r.content.includes('test content'));
-            const oldResult = ranked.find(r => r.content.includes('test content'));
+            // Results are found via the rankingDetails comparison below
 
             // Recent file should have higher recency score
             const recentDetails = ranked.find(r =>
@@ -487,7 +485,8 @@ describe('Ranker', () => {
                 createMockResult(0.7, { mtime: Date.now() }),
             ];
 
-            const rankedEnabled = ranker.rank(results, 'test');
+            // First ranking call with enabled=true (default)
+            ranker.rank(results, 'test');
 
             ranker.updateConfig({ enabled: false });
 

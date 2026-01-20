@@ -39,7 +39,7 @@ export class ImportAnalyzer {
      */
     analyzeFile(code: string, language: string, filePath: string): ImportInfo[] {
         const imports: ImportInfo[] = [];
-        const lines = code.split('\n');
+        const lines = code.split(/\r?\n/);
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -101,7 +101,7 @@ export class ImportAnalyzer {
                 const csImports = this.extractCSharpImports(line, language, filePath, lineNumber);
                 imports.push(...csImports);
             }
-        } catch (error) {
+        } catch {
             // Silently skip lines that fail to parse
         }
 

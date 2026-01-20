@@ -1,8 +1,7 @@
 import * as fs from "fs";
-import * as path from "path";
 import { Context, COLLECTION_LIMIT_MESSAGE } from "@dannyboy2042/claude-context-core";
 import { SnapshotManager } from "./snapshot.js";
-import { ensureAbsolutePath, truncateContent, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
+import { ensureAbsolutePath, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
 
 export class ToolHandlers {

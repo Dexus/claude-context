@@ -533,7 +533,7 @@ describe('LangChainCodeSplitter', () => {
 
             it('should handle code with special characters', async () => {
                 const splitter = new LangChainCodeSplitter();
-                const code = `const emoji = "\u{1F600}"; const special = "<>&\"'";`;
+                const code = `const emoji = "\u{1F600}"; const special = "<>&"'";`;
 
                 __mockCreateDocuments.mockResolvedValue([
                     { pageContent: code, metadata: { loc: { lines: { from: 1, to: 1 } } } },

@@ -12,6 +12,12 @@ import { Ranker } from './ranker';
 import { RankingConfig, RankedSearchResult } from './types';
 import { VectorSearchResult } from '../vectordb/types';
 
+/** Minimum threshold for considering a metric improvement significant */
+const SIGNIFICANCE_THRESHOLD = 0.01;
+
+/** Minimum position change to consider a document a "significant mover" */
+const SIGNIFICANT_POSITION_CHANGE = 3;
+
 /**
  * Test query with expected relevant document IDs
  */
@@ -195,14 +201,14 @@ export class ABTest {
 
         // Calculate overall winner (simple majority vote)
         let scoreDiff = 0;
-        if (improvements.ndcg > 0.01) scoreDiff++;
-        else if (improvements.ndcg < -0.01) scoreDiff--;
-        if (improvements.mrr > 0.01) scoreDiff++;
-        else if (improvements.mrr < -0.01) scoreDiff--;
-        if (improvements.precisionAt5 > 0.01) scoreDiff++;
-        else if (improvements.precisionAt5 < -0.01) scoreDiff--;
-        if (improvements.precisionAt10 > 0.01) scoreDiff++;
-        else if (improvements.precisionAt10 < -0.01) scoreDiff--;
+        if (improvements.ndcg > SIGNIFICANCE_THRESHOLD) scoreDiff++;
+        else if (improvements.ndcg < -SIGNIFICANCE_THRESHOLD) scoreDiff--;
+        if (improvements.mrr > SIGNIFICANCE_THRESHOLD) scoreDiff++;
+        else if (improvements.mrr < -SIGNIFICANCE_THRESHOLD) scoreDiff--;
+        if (improvements.precisionAt5 > SIGNIFICANCE_THRESHOLD) scoreDiff++;
+        else if (improvements.precisionAt5 < -SIGNIFICANCE_THRESHOLD) scoreDiff--;
+        if (improvements.precisionAt10 > SIGNIFICANCE_THRESHOLD) scoreDiff++;
+        else if (improvements.precisionAt10 < -SIGNIFICANCE_THRESHOLD) scoreDiff--;
 
         const winner: 'A' | 'B' | 'tie' = scoreDiff > 0 ? 'B' : scoreDiff < 0 ? 'A' : 'tie';
 
@@ -400,12 +406,12 @@ export class ABTest {
             positionsB.set(this.getDocId(result), index);
         });
 
-        // Find documents with significant position changes (>= 3 positions)
+        // Find documents with significant position changes
         for (const [docId, posA] of positionsA) {
             const posB = positionsB.get(docId);
             if (posB !== undefined) {
                 const change = posA - posB;
-                if (Math.abs(change) >= 3) {
+                if (Math.abs(change) >= SIGNIFICANT_POSITION_CHANGE) {
                     movers.push({
                         docId,
                         positionA: posA,

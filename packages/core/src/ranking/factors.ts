@@ -6,6 +6,16 @@
 import { VectorDocument } from '../vectordb/types';
 
 /**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Scale factor for sigmoid normalization in term frequency scoring */
+const SIGMOID_SCALE_FACTOR = 100;
+
+/**
  * Calculate recency score using exponential decay
  * More recent files get higher scores
  *
@@ -65,7 +75,7 @@ export function calculateTermFrequencyScore(content: string, queryTerms: string[
     // Count matches for each query term
     for (const term of queryTerms) {
         const termLower = term.toLowerCase();
-        const regex = new RegExp(termLower, 'g');
+        const regex = new RegExp(escapeRegex(termLower), 'g');
         const matches = contentLower.match(regex);
         totalMatches += matches ? matches.length : 0;
     }
@@ -82,8 +92,7 @@ export function calculateTermFrequencyScore(content: string, queryTerms: string[
 
     // Apply sigmoid function to map to [0, 1] range
     // This compresses very high scores while keeping small differences visible
-    // Using sigmoid with scale factor 100
-    const score = 1 / (1 + Math.exp(-100 * normalizedScore));
+    const score = 1 / (1 + Math.exp(-SIGMOID_SCALE_FACTOR * normalizedScore));
 
     return Math.max(0, Math.min(1, score));
 }
