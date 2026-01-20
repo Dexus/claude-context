@@ -118,6 +118,7 @@ export class Context {
     private rankingConfig: RankingConfig;
     private ranker: Ranker;
     private fileWatcher: FileWatcher | null;
+    private reindexingInProgress: boolean;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -146,6 +147,9 @@ export class Context {
 
         // Initialize file watcher
         this.fileWatcher = null;
+
+        // Initialize reindexing flag
+        this.reindexingInProgress = false;
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -361,71 +365,83 @@ export class Context {
         codebasePath: string,
         progressCallback?: (progress: { phase: string; current: number; total: number; percentage: number }) => void
     ): Promise<{ added: number, removed: number, modified: number }> {
-        const collectionName = this.getCollectionName(codebasePath);
-        const synchronizer = this.synchronizers.get(collectionName);
-
-        if (!synchronizer) {
-            // Load project-specific ignore patterns before creating FileSynchronizer
-            await this.loadIgnorePatterns(codebasePath);
-
-            // To be safe, let's initialize if it's not there.
-            const newSynchronizer = new FileSynchronizer(codebasePath, this.ignorePatterns);
-            await newSynchronizer.initialize();
-            this.synchronizers.set(collectionName, newSynchronizer);
-        }
-
-        const currentSynchronizer = this.synchronizers.get(collectionName)!;
-
-        progressCallback?.({ phase: 'Checking for file changes...', current: 0, total: 100, percentage: 0 });
-        const { added, removed, modified } = await currentSynchronizer.checkForChanges();
-        const totalChanges = added.length + removed.length + modified.length;
-
-        if (totalChanges === 0) {
-            progressCallback?.({ phase: 'No changes detected', current: 100, total: 100, percentage: 100 });
-            console.log('✅ No file changes detected.');
+        // Early return if already reindexing
+        if (this.reindexingInProgress) {
+            console.warn('Reindexing already in progress, skipping this request');
             return { added: 0, removed: 0, modified: 0 };
         }
 
-        console.log(`🔄 Found changes: ${added.length} added, ${removed.length} removed, ${modified.length} modified.`);
+        this.reindexingInProgress = true;
 
-        let processedChanges = 0;
-        const updateProgress = (phase: string) => {
-            processedChanges++;
-            const percentage = Math.round((processedChanges / (removed.length + modified.length + added.length)) * 100);
-            progressCallback?.({ phase, current: processedChanges, total: totalChanges, percentage });
-        };
+        try {
+            const collectionName = this.getCollectionName(codebasePath);
+            const synchronizer = this.synchronizers.get(collectionName);
 
-        // Handle removed files
-        for (const file of removed) {
-            await this.deleteFileChunks(collectionName, file);
-            updateProgress(`Removed ${file}`);
+            if (!synchronizer) {
+                // Load project-specific ignore patterns before creating FileSynchronizer
+                await this.loadIgnorePatterns(codebasePath);
+
+                // To be safe, let's initialize if it's not there.
+                const newSynchronizer = new FileSynchronizer(codebasePath, this.ignorePatterns);
+                await newSynchronizer.initialize();
+                this.synchronizers.set(collectionName, newSynchronizer);
+            }
+
+            const currentSynchronizer = this.synchronizers.get(collectionName)!;
+
+            progressCallback?.({ phase: 'Checking for file changes...', current: 0, total: 100, percentage: 0 });
+            const { added, removed, modified } = await currentSynchronizer.checkForChanges();
+            const totalChanges = added.length + removed.length + modified.length;
+
+            if (totalChanges === 0) {
+                progressCallback?.({ phase: 'No changes detected', current: 100, total: 100, percentage: 100 });
+                console.log('✅ No file changes detected.');
+                return { added: 0, removed: 0, modified: 0 };
+            }
+
+            console.log(`🔄 Found changes: ${added.length} added, ${removed.length} removed, ${modified.length} modified.`);
+
+            let processedChanges = 0;
+            const updateProgress = (phase: string) => {
+                processedChanges++;
+                const percentage = Math.round((processedChanges / (removed.length + modified.length + added.length)) * 100);
+                progressCallback?.({ phase, current: processedChanges, total: totalChanges, percentage });
+            };
+
+            // Handle removed files
+            for (const file of removed) {
+                await this.deleteFileChunks(collectionName, file);
+                updateProgress(`Removed ${file}`);
+            }
+
+            // Handle modified files
+            for (const file of modified) {
+                await this.deleteFileChunks(collectionName, file);
+                updateProgress(`Deleted old chunks for ${file}`);
+            }
+
+            // Handle added and modified files
+            const filesToIndex = [...added, ...modified].map(f => path.join(codebasePath, f));
+
+            if (filesToIndex.length > 0) {
+                await this.processFileList(
+                    filesToIndex,
+                    codebasePath,
+                    (filePath, fileIndex, totalFiles) => {
+                        updateProgress(`Indexed ${filePath} (${fileIndex}/${totalFiles})`);
+                    }
+                );
+            }
+
+            console.log(`✅ Re-indexing complete. Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
+            // Emit notification for MCP clients
+            console.log(`📢 NOTIFICATION: Auto-reindexing completed - Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
+            progressCallback?.({ phase: 'Re-indexing complete!', current: totalChanges, total: totalChanges, percentage: 100 });
+
+            return { added: added.length, removed: removed.length, modified: modified.length };
+        } finally {
+            this.reindexingInProgress = false;
         }
-
-        // Handle modified files
-        for (const file of modified) {
-            await this.deleteFileChunks(collectionName, file);
-            updateProgress(`Deleted old chunks for ${file}`);
-        }
-
-        // Handle added and modified files
-        const filesToIndex = [...added, ...modified].map(f => path.join(codebasePath, f));
-
-        if (filesToIndex.length > 0) {
-            await this.processFileList(
-                filesToIndex,
-                codebasePath,
-                (filePath, fileIndex, totalFiles) => {
-                    updateProgress(`Indexed ${filePath} (${fileIndex}/${totalFiles})`);
-                }
-            );
-        }
-
-        console.log(`✅ Re-indexing complete. Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
-        // Emit notification for MCP clients
-        console.log(`📢 NOTIFICATION: Auto-reindexing completed - Added: ${added.length}, Removed: ${removed.length}, Modified: ${modified.length}`);
-        progressCallback?.({ phase: 'Re-indexing complete!', current: totalChanges, total: totalChanges, percentage: 100 });
-
-        return { added: added.length, removed: removed.length, modified: modified.length };
     }
 
     private async deleteFileChunks(collectionName: string, relativePath: string): Promise<void> {
@@ -1138,7 +1154,7 @@ export class Context {
         try {
             const content = await fs.promises.readFile(filePath, 'utf-8');
             return content
-                .split('\n')
+                .split(/\r?\n/)
                 .map(line => line.trim())
                 .filter(line => line && !line.startsWith('#')); // Filter out empty lines and comments
         } catch (error) {

@@ -27,11 +27,13 @@ export class ChokidarFileWatcher implements FileWatcher {
     private stats: WatcherStats;
     private rootDir: string;
     private isRunning: boolean;
+    private isProcessing: boolean;
 
     constructor(rootDir: string, options: WatcherOptions) {
         this.rootDir = path.resolve(rootDir);
         this.watcher = null;
         this.isRunning = false;
+        this.isProcessing = false;
         this.changeCallback = null;
         this.errorCallback = null;
         this.debounceTimer = null;
@@ -65,7 +67,7 @@ export class ChokidarFileWatcher implements FileWatcher {
         }
 
         try {
-            console.log(`Starting file watcher for ${this.rootDir}`);
+            console.log(`[FILEWATCHER] Starting file watcher for ${this.rootDir}`);
 
             // Normalize paths to be absolute
             const watchPaths = this.normalizePaths(this.options.paths);
@@ -99,7 +101,7 @@ export class ChokidarFileWatcher implements FileWatcher {
             this.isRunning = true;
             this.stats.startedAt = Date.now();
 
-            console.log('File watcher started successfully');
+            console.log('[FILEWATCHER] File watcher started successfully');
         } catch (error: any) {
             this.stats.errors++;
             this.handleError(error);
@@ -109,12 +111,15 @@ export class ChokidarFileWatcher implements FileWatcher {
 
     public async stop(): Promise<void> {
         if (!this.isRunning) {
-            console.warn('File watcher is not running');
+            console.warn('[FILEWATCHER] File watcher is not running');
             return;
         }
 
         try {
-            console.log('Stopping file watcher');
+            console.log('[FILEWATCHER] Stopping file watcher');
+
+            // Set running flag to false immediately to prevent new events
+            this.isRunning = false;
 
             // Clear any pending debounce timer
             if (this.debounceTimer) {
@@ -134,11 +139,10 @@ export class ChokidarFileWatcher implements FileWatcher {
             }
 
             // Reset state
-            this.isRunning = false;
             this.pendingChanges.clear();
             this.pendingEvents = [];
 
-            console.log('File watcher stopped successfully');
+            console.log('[FILEWATCHER] File watcher stopped successfully');
         } catch (error: any) {
             this.stats.errors++;
             this.handleError(error);
@@ -190,7 +194,7 @@ export class ChokidarFileWatcher implements FileWatcher {
             try {
                 relativePath = path.relative(this.rootDir, filePath);
             } catch (error: any) {
-                console.warn(`Failed to get relative path for ${filePath}: ${error.message}`);
+                console.warn(`[FILEWATCHER] Failed to get relative path for ${filePath}: ${error.message}`);
                 relativePath = filePath;
             }
 
@@ -227,11 +231,13 @@ export class ChokidarFileWatcher implements FileWatcher {
     }
 
     private async processPendingChanges(): Promise<void> {
-        if (!this.changeCallback || this.pendingChanges.size === 0) {
+        if (!this.changeCallback || this.pendingChanges.size === 0 || this.isProcessing) {
             return;
         }
 
         try {
+            this.isProcessing = true;
+
             // Clone the pending changes and events
             const changesToProcess = new Set(this.pendingChanges);
             const eventsToProcess = [...this.pendingEvents];
@@ -249,6 +255,16 @@ export class ChokidarFileWatcher implements FileWatcher {
         } catch (error: any) {
             this.stats.errors++;
             this.handleError(error);
+        } finally {
+            this.isProcessing = false;
+
+            // If new changes arrived while processing, trigger a new process
+            if (this.pendingChanges.size > 0) {
+                this.debounceTimer = setTimeout(
+                    () => this.processPendingChanges(),
+                    this.options.debounceMs
+                );
+            }
         }
     }
 
@@ -265,20 +281,21 @@ export class ChokidarFileWatcher implements FileWatcher {
                 }
                 this.stats.watchedFiles = totalFiles;
             }
-            console.log(`File watcher ready. Watching ${this.stats.watchedFiles} files.`);
+            console.log(`[FILEWATCHER] File watcher ready. Watching ${this.stats.watchedFiles} files.`);
         } catch (error: any) {
-            console.warn(`Failed to get watched files count: ${error.message}`);
+            console.warn(`[FILEWATCHER] Failed to get watched files count: ${error.message}`);
         }
     }
 
     private handleError(error: Error): void {
-        console.error('File watcher error:', error);
+        this.stats.errors++;
+        console.error('[FILEWATCHER] File watcher error:', error);
 
         if (this.errorCallback) {
             try {
                 this.errorCallback(error);
             } catch (callbackError: any) {
-                console.error('Error in error callback:', callbackError);
+                console.error('[FILEWATCHER] Error in error callback:', callbackError);
             }
         }
     }

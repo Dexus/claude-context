@@ -94,7 +94,7 @@ export function createMcpConfig(): ContextMcpConfig {
         milvusToken: envManager.get('MILVUS_TOKEN'),
         // File watcher configuration
         enableFileWatcher: envManager.get('ENABLE_FILE_WATCHER') === 'true',
-        fileWatchDebounceMs: parseInt(envManager.get('FILE_WATCH_DEBOUNCE_MS') || '1000', 10)
+        fileWatchDebounceMs: parseInt(envManager.get('FILE_WATCH_DEBOUNCE_MS') || '2000', 10) || 2000
     };
 
     return config;
@@ -165,7 +165,7 @@ Environment Variables:
 
   File Watcher Configuration:
   ENABLE_FILE_WATCHER     Enable automatic file watching for codebase changes (default: true)
-  FILE_WATCH_DEBOUNCE_MS  Debounce time for file change events in milliseconds (default: 1000)
+  FILE_WATCH_DEBOUNCE_MS  Debounce time for file change events in milliseconds (default: 2000)
 
 Examples:
   # Start MCP server with OpenAI (default) and explicit Milvus address

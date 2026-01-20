@@ -7,10 +7,7 @@ import {
     WatcherOptions
 } from '../../watcher/types';
 
-// Use manual mock for chokidar
-jest.mock('chokidar', () => {
-    return jest.createMockFromModule('chokidar');
-});
+jest.mock('chokidar');
 
 describe('ChokidarFileWatcher', () => {
     let tempDir: string;
@@ -24,6 +21,35 @@ describe('ChokidarFileWatcher', () => {
     beforeEach(() => {
         homeDir = os.homedir();
         tempDir = path.join(homeDir, 'test-project');
+
+        // Set up chokidar mock
+        const chokidar = require('chokidar');
+        const createMockFSWatcher = () => {
+            const watcher: any = {
+                on: jest.fn(function(this: any, event: string, callback: any) {
+                    watcher.handlers[event] = callback;
+                    return watcher;
+                }),
+                close: jest.fn(async () => {
+                    watcher.closed = true;
+                }),
+                getWatched: jest.fn(() => watcher.watchedPaths || {}),
+                add: jest.fn(() => watcher),
+                unwatch: jest.fn(() => watcher),
+                closed: false,
+                handlers: {} as Record<string, any>,
+                watchedPaths: {} as Record<string, string[]>
+            };
+            return watcher;
+        };
+        chokidar.watch.mockImplementation((paths: string | string[], _options?: any) => {
+            const watcher = createMockFSWatcher();
+            const pathStr = Array.isArray(paths) ? paths[0] : paths;
+            watcher.watchedPaths = {
+                [pathStr]: ['file1.ts', 'file2.ts', 'src/file3.ts']
+            };
+            return watcher;
+        });
 
         // Mock console to prevent noise in tests
         console.log = jest.fn();
@@ -171,8 +197,10 @@ describe('ChokidarFileWatcher', () => {
             await watcher.start();
 
             const chokidar = require('chokidar');
-            const watchedPath = (chokidar.watch as jest.Mock).mock.calls[0][0];
-            expect(path.isAbsolute(watchedPath)).toBe(true);
+            const watchedPaths = (chokidar.watch as jest.Mock).mock.calls[0][0];
+            // normalizePaths returns an array
+            expect(Array.isArray(watchedPaths)).toBe(true);
+            expect(path.isAbsolute(watchedPaths[0])).toBe(true);
 
             await watcher.stop();
         });
@@ -275,7 +303,7 @@ describe('ChokidarFileWatcher', () => {
 
             // Should not throw, just warn
             await expect(watcher.stop()).resolves.not.toThrow();
-            expect(console.warn).toHaveBeenCalledWith('File watcher is not running');
+            expect(console.warn).toHaveBeenCalledWith('[FILEWATCHER] File watcher is not running');
         });
     });
 
