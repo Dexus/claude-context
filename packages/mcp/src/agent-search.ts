@@ -42,6 +42,8 @@ export class AgentSearch {
     private static readonly OVERLAP_PENALTY_FACTOR = 0.5;
     /** Weight factor for adjacent (non-overlapping) chunks */
     private static readonly ADJACENCY_WEIGHT = 0.7;
+    /** Minimum similarity score threshold for semantic search results */
+    private static readonly SIMILARITY_THRESHOLD = 0.3;
 
     private context: Context;
     private maxIterations: number;
@@ -290,7 +292,7 @@ export class AgentSearch {
                 codebasePath,
                 query,
                 Math.min(limit, 50), // Cap at 50
-                0.3, // Similarity threshold
+                AgentSearch.SIMILARITY_THRESHOLD,
                 filterExpr
             );
 
@@ -719,8 +721,9 @@ export class AgentSearch {
                 let weight: number;
                 if (isOverlapping) {
                     // Calculate overlap ratio, guarding against division by zero for single-line chunks
+                    // Use oldEnd (the original endpoint before extension) to calculate actual overlap
                     const denominator = next.endLine - next.startLine;
-                    const overlapAmount = Math.min(current.endLine, next.endLine) - next.startLine;
+                    const overlapAmount = Math.min(oldEnd, next.endLine) - next.startLine;
                     // Only calculate ratio if there's a valid range and actual overlap
                     const overlapRatio = denominator > 0 && overlapAmount > 0
                         ? Math.min(overlapAmount / denominator, 1.0)  // Clamp to [0, 1]

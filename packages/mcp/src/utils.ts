@@ -33,7 +33,7 @@ export function trackCodebasePath(codebasePath: string): void {
  * Build filter expression from extensionFilter array
  * Validates extensions and returns either a filter expression or an error
  */
-export function buildExtensionFilterExpression(extensionFilter: any[]): { filterExpr?: string; error?: string } {
+export function buildExtensionFilterExpression(extensionFilter?: any[]): { filterExpr?: string; error?: string } {
     if (!Array.isArray(extensionFilter) || extensionFilter.length === 0) {
         return {};
     }

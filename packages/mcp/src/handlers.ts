@@ -141,6 +141,97 @@ export class ToolHandlers {
         }
     }
 
+    /**
+     * Shared validation and preparation logic for search handlers.
+     * Validates path, checks indexing status, and builds extension filter.
+     */
+    private async validateAndPrepareSearch(
+        codebasePath: string,
+        extensionFilter?: any[]
+    ): Promise<
+        | { success: true; absolutePath: string; isIndexing: boolean; indexingStatusMessage: string; filterExpr?: string }
+        | { success: false; response: { content: { type: string; text: string }[]; isError: boolean } }
+    > {
+        // Sync indexed codebases from cloud first
+        await this.syncIndexedCodebasesFromCloud();
+
+        // Force absolute path resolution - warn if relative path provided
+        const absolutePath = ensureAbsolutePath(codebasePath);
+
+        // Validate path exists
+        if (!fs.existsSync(absolutePath)) {
+            return {
+                success: false,
+                response: {
+                    content: [{
+                        type: "text",
+                        text: `Error: Path '${absolutePath}' does not exist. Original input: '${codebasePath}'`
+                    }],
+                    isError: true
+                }
+            };
+        }
+
+        // Check if it's a directory
+        const stat = fs.statSync(absolutePath);
+        if (!stat.isDirectory()) {
+            return {
+                success: false,
+                response: {
+                    content: [{
+                        type: "text",
+                        text: `Error: Path '${absolutePath}' is not a directory`
+                    }],
+                    isError: true
+                }
+            };
+        }
+
+        trackCodebasePath(absolutePath);
+
+        // Check if this codebase is indexed or being indexed
+        const isIndexed = this.snapshotManager.getIndexedCodebases().includes(absolutePath);
+        const isIndexing = this.snapshotManager.getIndexingCodebases().includes(absolutePath);
+
+        if (!isIndexed && !isIndexing) {
+            return {
+                success: false,
+                response: {
+                    content: [{
+                        type: "text",
+                        text: `Error: Codebase '${absolutePath}' is not indexed. Please index it first using the index_codebase tool.`
+                    }],
+                    isError: true
+                }
+            };
+        }
+
+        // Show indexing status if codebase is being indexed
+        const indexingStatusMessage = isIndexing
+            ? `\n⚠️  **Indexing in Progress**: This codebase is currently being indexed in the background. Search results may be incomplete until indexing completes.`
+            : '';
+
+        // Build filter expression from extensionFilter list using shared utility
+        const filterResult = buildExtensionFilterExpression(extensionFilter);
+        if (filterResult.error) {
+            return {
+                success: false,
+                response: {
+                    content: [{ type: 'text', text: filterResult.error }],
+                    isError: true
+                }
+            };
+        }
+
+        return {
+            success: true,
+            absolutePath,
+            isIndexing,
+            indexingStatusMessage,
+            filterExpr: filterResult.filterExpr
+        };
+    }
+
     public async handleIndexCodebase(args: any) {
         const { path: codebasePath, force, splitter, customExtensions, ignorePatterns } = args;
         const forceReindex = force || false;
@@ -414,56 +505,13 @@ export class ToolHandlers {
         const resultLimit = limit || 10;
 
         try {
-            // Sync indexed codebases from cloud first
-            await this.syncIndexedCodebasesFromCloud();
-
-            // Force absolute path resolution - warn if relative path provided
-            const absolutePath = ensureAbsolutePath(codebasePath);
-
-            // Validate path exists
-            if (!fs.existsSync(absolutePath)) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Error: Path '${absolutePath}' does not exist. Original input: '${codebasePath}'`
-                    }],
-                    isError: true
-                };
+            // Use shared validation helper
+            const validation = await this.validateAndPrepareSearch(codebasePath, extensionFilter);
+            if (!validation.success) {
+                return validation.response;
             }
 
-            // Check if it's a directory
-            const stat = fs.statSync(absolutePath);
-            if (!stat.isDirectory()) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Error: Path '${absolutePath}' is not a directory`
-                    }],
-                    isError: true
-                };
-            }
-
-            trackCodebasePath(absolutePath);
-
-            // Check if this codebase is indexed or being indexed
-            const isIndexed = this.snapshotManager.getIndexedCodebases().includes(absolutePath);
-            const isIndexing = this.snapshotManager.getIndexingCodebases().includes(absolutePath);
-
-            if (!isIndexed && !isIndexing) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Error: Codebase '${absolutePath}' is not indexed. Please index it first using the index_codebase tool.`
-                    }],
-                    isError: true
-                };
-            }
-
-            // Show indexing status if codebase is being indexed
-            let indexingStatusMessage = '';
-            if (isIndexing) {
-                indexingStatusMessage = `\n⚠️  **Indexing in Progress**: This codebase is currently being indexed in the background. Search results may be incomplete until indexing completes.`;
-            }
+            const { absolutePath, isIndexing, indexingStatusMessage, filterExpr } = validation;
 
             console.log(`[SEARCH] Searching in codebase: ${absolutePath}`);
             console.log(`[SEARCH] Query: "${query}"`);
@@ -473,16 +521,6 @@ export class ToolHandlers {
             const embeddingProvider = this.context.getEmbedding();
             console.log(`[SEARCH] 🧠 Using embedding provider: ${embeddingProvider.getProvider()} for search`);
             console.log(`[SEARCH] 🔍 Generating embeddings for query using ${embeddingProvider.getProvider()}...`);
-
-            // Build filter expression from extensionFilter list using shared utility
-            const filterResult = buildExtensionFilterExpression(extensionFilter);
-            if (filterResult.error) {
-                return {
-                    content: [{ type: 'text', text: filterResult.error }],
-                    isError: true
-                };
-            }
-            const filterExpr = filterResult.filterExpr;
 
             // Search in the specified codebase
             const searchResults = await this.context.semanticSearch(
@@ -562,10 +600,7 @@ export class ToolHandlers {
         const { path: codebasePath, query, maxIterations = 5, strategy = 'iterative', limit = 10, extensionFilter } = args;
 
         try {
-            // Sync indexed codebases from cloud first
-            await this.syncIndexedCodebasesFromCloud();
-
-            // Validate strategy parameter
+            // Validate strategy parameter (specific to agent search)
             const validStrategies = ['iterative', 'breadth-first', 'focused'];
             if (!validStrategies.includes(strategy)) {
                 return {
@@ -577,59 +612,19 @@ export class ToolHandlers {
                 };
             }
 
-            // Validate maxIterations
+            // Validate maxIterations (specific to agent search)
             const iterations = Math.max(1, Math.min(maxIterations, 10));
             if (iterations !== maxIterations) {
                 console.log(`[AGENT-SEARCH] ⚠️  maxIterations clamped from ${maxIterations} to ${iterations}`);
             }
 
-            // Force absolute path resolution - warn if relative path provided
-            const absolutePath = ensureAbsolutePath(codebasePath);
-
-            // Validate path exists
-            if (!fs.existsSync(absolutePath)) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Error: Path '${absolutePath}' does not exist. Original input: '${codebasePath}'`
-                    }],
-                    isError: true
-                };
+            // Use shared validation helper
+            const validation = await this.validateAndPrepareSearch(codebasePath, extensionFilter);
+            if (!validation.success) {
+                return validation.response;
             }
 
-            // Check if it's a directory
-            const stat = fs.statSync(absolutePath);
-            if (!stat.isDirectory()) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Error: Path '${absolutePath}' is not a directory`
-                    }],
-                    isError: true
-                };
-            }
-
-            trackCodebasePath(absolutePath);
-
-            // Check if this codebase is indexed or being indexed
-            const isIndexed = this.snapshotManager.getIndexedCodebases().includes(absolutePath);
-            const isIndexing = this.snapshotManager.getIndexingCodebases().includes(absolutePath);
-
-            if (!isIndexed && !isIndexing) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Error: Codebase '${absolutePath}' is not indexed. Please index it first using the index_codebase tool.`
-                    }],
-                    isError: true
-                };
-            }
-
-            // Show indexing status if codebase is being indexed
-            let indexingStatusMessage = '';
-            if (isIndexing) {
-                indexingStatusMessage = `\n⚠️  **Indexing in Progress**: This codebase is currently being indexed in the background. Search results may be incomplete until indexing completes.`;
-            }
+            const { absolutePath, isIndexing, indexingStatusMessage, filterExpr } = validation;
 
             console.log(`[AGENT-SEARCH] Starting agent search in codebase: ${absolutePath}`);
             console.log(`[AGENT-SEARCH] Query: "${query}"`);
@@ -640,16 +635,6 @@ export class ToolHandlers {
             // Log embedding provider information before search
             const embeddingProvider = this.context.getEmbedding();
             console.log(`[AGENT-SEARCH] 🧠 Using embedding provider: ${embeddingProvider.getProvider()} for search`);
-
-            // Build filter expression from extensionFilter list using shared utility
-            const filterResult = buildExtensionFilterExpression(extensionFilter);
-            if (filterResult.error) {
-                return {
-                    content: [{ type: 'text', text: filterResult.error }],
-                    isError: true
-                };
-            }
-            const filterExpr = filterResult.filterExpr;
 
             // Create and execute agent search
             const agentSearch = new AgentSearch(this.context, iterations);
