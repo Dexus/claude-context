@@ -27,10 +27,19 @@ export interface ImportGraph {
     frequency: ImportFrequency;
 }
 
+/**
+ * Information about a parse error for debugging
+ */
+export interface ParseError {
+    filePath: string;
+    lineNumber: number;
+    error: string;
+}
+
 export class ImportAnalyzer {
     private imports: ImportInfo[] = [];
     private cachedGraph: ImportGraph | null = null;
-    private parseErrorCount: number = 0;
+    private parseErrors: ParseError[] = [];
     private static readonly MAX_LOGGED_ERRORS = 5;
 
     /**
@@ -137,15 +146,22 @@ export class ImportAnalyzer {
                 imports.push(...csImports);
             }
         } catch (error) {
-            this.parseErrorCount++;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            // Store parse error for later retrieval
+            this.parseErrors.push({
+                filePath,
+                lineNumber,
+                error: errorMessage
+            });
             // Log first few errors at warn level, then only if DEBUG is set
-            if (this.parseErrorCount <= ImportAnalyzer.MAX_LOGGED_ERRORS) {
-                console.warn(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${error}`);
-                if (this.parseErrorCount === ImportAnalyzer.MAX_LOGGED_ERRORS) {
+            const errorCount = this.parseErrors.length;
+            if (errorCount <= ImportAnalyzer.MAX_LOGGED_ERRORS) {
+                console.warn(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${errorMessage}`);
+                if (errorCount === ImportAnalyzer.MAX_LOGGED_ERRORS) {
                     console.warn(`[ImportAnalyzer] Suppressing further parse error warnings. Set DEBUG=1 for all errors.`);
                 }
             } else if (process.env.DEBUG) {
-                console.debug(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${error}`);
+                console.debug(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${errorMessage}`);
             }
         }
 
@@ -457,44 +473,72 @@ export class ImportAnalyzer {
             const normalizedImport = this.normalizePath(imp.importedPath);
             const importBasename = this.getBasename(normalizedImport);
 
-            // Exact match after normalization
-            if (normalizedImport === normalizedTarget) {
-                return true;
-            }
-
-            // Match if import path ends with the target (handles relative imports)
-            // e.g., './utils/format' matches 'src/utils/format.ts'
-            if (normalizedTarget.endsWith(normalizedImport) || normalizedImport.endsWith(normalizedTarget)) {
-                // Ensure we're matching at a path boundary (not partial filename)
-                const longer = normalizedTarget.length > normalizedImport.length ? normalizedTarget : normalizedImport;
-                const shorter = normalizedTarget.length > normalizedImport.length ? normalizedImport : normalizedTarget;
-                const idx = longer.lastIndexOf(shorter);
-                if (idx === 0 || longer[idx - 1] === '/') {
-                    return true;
-                }
-            }
-
-            // Match by basename only if:
-            // 1. Basenames are identical
-            // 2. Not a generic name like 'index'
-            // 3. Either: basename is very unique (>8 chars) OR there's partial directory overlap
-            // This prevents false positives like 'auth' matching unrelated auth.ts files
-            if (targetBasename === importBasename && targetBasename !== 'index') {
-                // Very long basenames are likely unique enough
-                if (targetBasename.length > 8) {
-                    return true;
-                }
-                // For shorter basenames, require at least one common directory segment
-                const targetDirs = normalizedTarget.split('/').slice(0, -1);
-                const importDirs = normalizedImport.split('/').slice(0, -1);
-                const hasCommonDir = targetDirs.some(dir => dir.length > 0 && importDirs.includes(dir));
-                if (hasCommonDir) {
-                    return true;
-                }
-            }
-
-            return false;
+            return (
+                this.isExactMatch(normalizedImport, normalizedTarget) ||
+                this.isSuffixMatch(normalizedImport, normalizedTarget) ||
+                this.isBasenameMatch(normalizedImport, normalizedTarget, importBasename, targetBasename)
+            );
         });
+    }
+
+    /**
+     * Check if two normalized paths match exactly
+     * @param normalizedImport First normalized path
+     * @param normalizedTarget Second normalized path
+     * @returns True if paths match exactly
+     */
+    private isExactMatch(normalizedImport: string, normalizedTarget: string): boolean {
+        return normalizedImport === normalizedTarget;
+    }
+
+    /**
+     * Check if paths match via suffix (one path ends with the other)
+     * Ensures match occurs at a path boundary to avoid partial filename matches
+     * @param normalizedImport First normalized path
+     * @param normalizedTarget Second normalized path
+     * @returns True if paths match via suffix at a path boundary
+     */
+    private isSuffixMatch(normalizedImport: string, normalizedTarget: string): boolean {
+        // Check if one path ends with the other
+        if (!normalizedTarget.endsWith(normalizedImport) && !normalizedImport.endsWith(normalizedTarget)) {
+            return false;
+        }
+
+        // Ensure we're matching at a path boundary (not partial filename)
+        const longer = normalizedTarget.length > normalizedImport.length ? normalizedTarget : normalizedImport;
+        const shorter = normalizedTarget.length > normalizedImport.length ? normalizedImport : normalizedTarget;
+        const idx = longer.lastIndexOf(shorter);
+        return idx === 0 || longer[idx - 1] === '/';
+    }
+
+    /**
+     * Check if paths match via basename with additional heuristics
+     * @param normalizedImport First normalized path
+     * @param normalizedTarget Second normalized path
+     * @param importBasename Basename of the import path
+     * @param targetBasename Basename of the target path
+     * @returns True if basenames match with sufficient uniqueness
+     */
+    private isBasenameMatch(
+        normalizedImport: string,
+        normalizedTarget: string,
+        importBasename: string,
+        targetBasename: string
+    ): boolean {
+        // Basenames must be identical and not a generic name
+        if (targetBasename !== importBasename || targetBasename === 'index') {
+            return false;
+        }
+
+        // Very long basenames (>8 chars) are likely unique enough
+        if (targetBasename.length > 8) {
+            return true;
+        }
+
+        // For shorter basenames, require at least one common directory segment
+        const targetDirs = normalizedTarget.split('/').slice(0, -1);
+        const importDirs = normalizedImport.split('/').slice(0, -1);
+        return targetDirs.some(dir => dir.length > 0 && importDirs.includes(dir));
     }
 
     /**
@@ -523,7 +567,7 @@ export class ImportAnalyzer {
     reset(): void {
         this.imports = [];
         this.cachedGraph = null;
-        this.parseErrorCount = 0;
+        this.parseErrors = [];
     }
 
     /**
@@ -531,6 +575,23 @@ export class ImportAnalyzer {
      */
     getTotalImports(): number {
         return this.imports.length;
+    }
+
+    /**
+     * Gets parse errors encountered during analysis
+     * Useful for debugging and data quality assessment
+     * @returns Array of parse errors
+     */
+    getParseErrors(): ParseError[] {
+        return [...this.parseErrors];
+    }
+
+    /**
+     * Gets the number of parse errors encountered
+     * @returns Number of parse errors
+     */
+    getParseErrorCount(): number {
+        return this.parseErrors.length;
     }
 
     /**

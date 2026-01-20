@@ -148,13 +148,14 @@ export class ABTest {
         const queryResults: QueryComparisonResult[] = [];
 
         let totalDocuments = 0;
+        let processedQueries = 0;
 
         // Process each test query
         for (const testQuery of testQueries) {
             const results = mockResults.get(testQuery.query);
             if (!results || results.length === 0) {
                 if (options.verbose) {
-                    // Log skipped query
+                    console.log(`[ABTest] Skipping query "${testQuery.query}" - no results available`);
                 }
                 continue;
             }
@@ -182,8 +183,13 @@ export class ABTest {
                 });
             }
 
+            processedQueries++;
             if (options.verbose) {
-                // Log progress
+                console.log(
+                    `[ABTest] Query ${processedQueries}/${testQueries.length}: "${testQuery.query}" - ` +
+                    `NDCG: A=${queryMetricsA.ndcg.toFixed(3)} B=${queryMetricsB.ndcg.toFixed(3)} ` +
+                    `MRR: A=${queryMetricsA.mrr.toFixed(3)} B=${queryMetricsB.mrr.toFixed(3)}`
+                );
             }
         }
 
@@ -298,9 +304,11 @@ export class ABTest {
         }
 
         // Calculate IDCG (Ideal DCG) - best possible ordering
+        // IDCG considers all positions in ranked results, assigning 0 relevance beyond available relevant docs
         let idcg = 0;
-        for (let i = 0; i < Math.min(rankedDocIds.length, relevantDocIds.length); i++) {
-            const relevance = relevantDocIds.length - i;
+        for (let i = 0; i < rankedDocIds.length; i++) {
+            // Relevance decreases with position (1-based), but is 0 if we exceed relevant docs count
+            const relevance = i < relevantDocIds.length ? relevantDocIds.length - i : 0;
             idcg += relevance / Math.log2(i + 2);
         }
 

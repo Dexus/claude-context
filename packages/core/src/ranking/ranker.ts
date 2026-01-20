@@ -83,7 +83,19 @@ export class Ranker {
 
         // Use global max import count if available (from indexing), otherwise calculate from results
         // Global max ensures consistent normalization across different queries
-        const maxImportCount = this.config.globalMaxImportCount ?? this.calculateMaxImportCount(results);
+        // Fallback to result-local max may cause scoring inconsistencies between queries
+        const maxImportCount = this.config.globalMaxImportCount ?? (() => {
+            const resultMax = this.calculateMaxImportCount(results);
+            if (resultMax > 0) {
+                // Warn about potential inconsistency when using result-local max
+                console.warn(
+                    '[Ranker] globalMaxImportCount not set, using result-local max for normalization. ' +
+                    'Import scores may be inconsistent across different queries. ' +
+                    'For consistent ranking, ensure globalMaxImportCount is set during indexing.'
+                );
+            }
+            return resultMax;
+        })();
 
         // Calculate final scores for each result
         const rankedResults = results.map(result => {
