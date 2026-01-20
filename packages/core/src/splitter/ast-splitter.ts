@@ -37,7 +37,7 @@ const SPLITTABLE_NODE_TYPES = {
     go: ['function_declaration', 'method_declaration', 'type_declaration', 'var_declaration', 'const_declaration'],
     rust: ['function_item', 'impl_item', 'struct_item', 'enum_item', 'trait_item', 'mod_item'],
     csharp: ['method_declaration', 'class_declaration', 'interface_declaration', 'struct_declaration', 'enum_declaration'],
-    dart: ['class_definition', 'function_signature', 'method_signature', 'constructor_signature', 'enum_declaration', 'mixin_declaration', 'extension_declaration'],
+    dart: ['class_definition', 'declaration', 'enum_declaration', 'mixin_declaration', 'extension_declaration'],
     terraform: ['resource', 'data', 'module', 'variable', 'output', 'provider', 'locals', 'terraform'],
     sql: ['create_table_statement', 'create_view_statement', 'create_index_statement', 'select_statement', 'insert_statement', 'update_statement', 'delete_statement', 'create_function_statement', 'create_procedure_statement'],
     yaml: ['block_mapping_pair', 'document']
@@ -118,6 +118,7 @@ export class AstCodeSplitter implements Splitter {
             'go': { parser: Go, nodeTypes: SPLITTABLE_NODE_TYPES.go },
             'rust': { parser: Rust, nodeTypes: SPLITTABLE_NODE_TYPES.rust },
             'rs': { parser: Rust, nodeTypes: SPLITTABLE_NODE_TYPES.rust },
+            'csharp': { parser: CSharp, nodeTypes: SPLITTABLE_NODE_TYPES.csharp },
             'cs': { parser: CSharp, nodeTypes: SPLITTABLE_NODE_TYPES.csharp },
             'dart': { parser: Dart, nodeTypes: SPLITTABLE_NODE_TYPES.dart },
             'terraform': { parser: Hcl, nodeTypes: SPLITTABLE_NODE_TYPES.terraform },
