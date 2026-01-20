@@ -24,6 +24,7 @@ describe('LanceDBVectorDatabase', () => {
         startLine: 1,
         endLine: 10,
         fileExtension: '.ts',
+        mtime: Date.now(),
         metadata: { testKey: 'testValue' }
     });
 

@@ -21,6 +21,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { FileSynchronizer } from './sync/synchronizer';
+import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
+import { RankingConfig, DEFAULT_RANKING_CONFIG, RankedSearchResult } from './ranking/types';
+import { Ranker } from './ranking/ranker';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
     // Programming languages
@@ -98,6 +101,7 @@ export interface ContextConfig {
     ignorePatterns?: string[];
     customExtensions?: string[]; // New: custom extensions from MCP
     customIgnorePatterns?: string[]; // New: custom ignore patterns from MCP
+    rankingConfig?: RankingConfig; // New: configuration for multi-factor ranking
 }
 
 export class Context {
@@ -107,6 +111,10 @@ export class Context {
     private supportedExtensions: string[];
     private ignorePatterns: string[];
     private synchronizers = new Map<string, FileSynchronizer>();
+    private importAnalyzer: ImportAnalyzer;
+    private importFrequencyMap: ImportFrequency;
+    private rankingConfig: RankingConfig;
+    private ranker: Ranker;
 
     constructor(config: ContextConfig = {}) {
         // Initialize services
@@ -122,6 +130,16 @@ export class Context {
         this.vectorDatabase = config.vectorDatabase;
 
         this.codeSplitter = config.codeSplitter || new AstCodeSplitter(2500, 300);
+
+        // Initialize import analyzer
+        this.importAnalyzer = new ImportAnalyzer();
+        this.importFrequencyMap = {};
+
+        // Initialize ranking configuration
+        this.rankingConfig = config.rankingConfig || { ...DEFAULT_RANKING_CONFIG };
+
+        // Initialize ranker with configuration
+        this.ranker = new Ranker(this.rankingConfig);
 
         // Load custom extensions from environment variables
         const envCustomExtensions = this.getCustomExtensionsFromEnv();
@@ -208,6 +226,23 @@ export class Context {
     }
 
     /**
+     * Get ranking configuration
+     */
+    getRankingConfig(): RankingConfig {
+        return { ...this.rankingConfig };
+    }
+
+    /**
+     * Update ranking configuration
+     * @param rankingConfig New ranking configuration
+     */
+    updateRankingConfig(rankingConfig: Partial<RankingConfig>): void {
+        this.rankingConfig = { ...this.rankingConfig, ...rankingConfig };
+        this.ranker.updateConfig(rankingConfig);
+        console.log(`🔄 Updated ranking configuration`);
+    }
+
+    /**
      * Public wrapper for loadIgnorePatterns private method
      */
     async getLoadedIgnorePatterns(codebasePath: string): Promise<void> {
@@ -254,7 +289,7 @@ export class Context {
         codebasePath: string,
         progressCallback?: (progress: { phase: string; current: number; total: number; percentage: number }) => void,
         forceReindex: boolean = false
-    ): Promise<{ indexedFiles: number; totalChunks: number; status: 'completed' | 'limit_reached' }> {
+    ): Promise<{ indexedFiles: number; totalChunks: number; status: 'completed' | 'limit_reached' | 'partial' }> {
         const isHybrid = this.getIsHybrid();
         const searchType = isHybrid === true ? 'hybrid search' : 'semantic search';
         console.log(`🚀 Starting to index codebase with ${searchType}: ${codebasePath}`);
@@ -386,8 +421,12 @@ export class Context {
     }
 
     private async deleteFileChunks(collectionName: string, relativePath: string): Promise<void> {
-        // Escape backslashes for Milvus query expression (Windows path compatibility)
-        const escapedPath = relativePath.replace(/\\/g, '\\\\');
+        // Escape special characters for Milvus query expression to prevent injection
+        // - Backslashes need to be escaped for Windows path compatibility
+        // - Double quotes need to be escaped to prevent query injection
+        const escapedPath = relativePath
+            .replace(/\\/g, '\\\\')  // Escape backslashes first
+            .replace(/"/g, '\\"');    // Then escape double quotes
         const results = await this.vectorDatabase.query(
             collectionName,
             `relativePath == "${escapedPath}"`,
@@ -404,13 +443,31 @@ export class Context {
     }
 
     /**
+     * Convert ranked search results to semantic search result format
+     * @param rankedResults Results from the Ranker
+     * @returns SemanticSearchResult array
+     */
+    private mapToSemanticResults(rankedResults: RankedSearchResult[]): SemanticSearchResult[] {
+        return rankedResults.map(result => ({
+            content: result.content,
+            relativePath: result.relativePath,
+            startLine: result.startLine,
+            endLine: result.endLine,
+            language: result.language,
+            score: result.score
+        }));
+    }
+
+    /**
      * Semantic search with unified implementation
      * @param codebasePath Codebase path to search in
      * @param query Search query
      * @param topK Number of results to return
      * @param threshold Similarity threshold
+     * @param filterExpr Optional filter expression for results
+     * @param enableRanking Whether to apply multi-factor ranking (default: true)
      */
-    async semanticSearch(codebasePath: string, query: string, topK: number = 5, threshold: number = 0.5, filterExpr?: string): Promise<SemanticSearchResult[]> {
+    async semanticSearch(codebasePath: string, query: string, topK: number = 5, threshold: number = 0.5, filterExpr?: string, enableRanking: boolean = true): Promise<SemanticSearchResult[]> {
         const isHybrid = this.getIsHybrid();
         const searchType = isHybrid === true ? 'hybrid search' : 'semantic search';
         console.log(`🔍 Executing ${searchType}: "${query}" in ${codebasePath}`);
@@ -476,15 +533,13 @@ export class Context {
 
             console.log(`🔍 Raw search results count: ${searchResults.length}`);
 
-            // 4. Convert to semantic search result format
-            const results: SemanticSearchResult[] = searchResults.map(result => ({
-                content: result.document.content,
-                relativePath: result.document.relativePath,
-                startLine: result.document.startLine,
-                endLine: result.document.endLine,
-                language: result.document.metadata.language || 'unknown',
-                score: result.score
-            }));
+            // 4. Apply ranking to results (if enabled)
+            // Use a temporary ranker with enabled flag based on parameter
+            const ranker = enableRanking ? this.ranker : new Ranker({ ...this.rankingConfig, enabled: false });
+            const rankedResults = ranker.rank(searchResults, query);
+
+            // 5. Convert to semantic search result format
+            const results = this.mapToSemanticResults(rankedResults);
 
             console.log(`✅ Found ${results.length} relevant hybrid results`);
             if (results.length > 0) {
@@ -504,15 +559,13 @@ export class Context {
                 { topK, threshold, filterExpr }
             );
 
-            // 3. Convert to semantic search result format
-            const results: SemanticSearchResult[] = searchResults.map(result => ({
-                content: result.document.content,
-                relativePath: result.document.relativePath,
-                startLine: result.document.startLine,
-                endLine: result.document.endLine,
-                language: result.document.metadata.language || 'unknown',
-                score: result.score
-            }));
+            // 3. Apply ranking to results (if enabled)
+            // Use a temporary ranker with enabled flag based on parameter
+            const ranker = enableRanking ? this.ranker : new Ranker({ ...this.rankingConfig, enabled: false });
+            const rankedResults = ranker.rank(searchResults, query);
+
+            // 4. Convert to semantic search result format
+            const results = this.mapToSemanticResults(rankedResults);
 
             console.log(`✅ Found ${results.length} relevant results`);
             return results;
@@ -695,33 +748,98 @@ export class Context {
     }
 
     /**
- * Process a list of files with streaming chunk processing
- * @param filePaths Array of file paths to process
- * @param codebasePath Base path for the codebase
- * @param onFileProcessed Callback called when each file is processed
- * @returns Object with processed file count and total chunk count
- */
-    private async processFileList(
+     * Pass 1: Analyze imports from all files to build import frequency map
+     * This must complete before chunk processing to ensure correct import counts
+     *
+     * @param filePaths Array of file paths to analyze
+     * @param codebasePath Base path for the codebase
+     * @returns Map of filePath -> file content data (for reuse in pass 2)
+     */
+    private async analyzeImportsPass(
+        filePaths: string[],
+        codebasePath: string
+    ): Promise<Map<string, { content: string; mtime: number; language: string }>> {
+        console.log(`📊 Pass 1: Analyzing imports across ${filePaths.length} files...`);
+        const fileContents = new Map<string, { content: string; mtime: number; language: string }>();
+        let skippedFilesCount = 0;
+
+        for (const filePath of filePaths) {
+            try {
+                const stats = await fs.promises.stat(filePath);
+                const mtime = stats.mtimeMs;
+                const content = await fs.promises.readFile(filePath, 'utf-8');
+                const language = this.getLanguageFromFilePath(filePath);
+                const relativePath = path.relative(codebasePath, filePath);
+
+                // Cache file content for pass 2
+                fileContents.set(filePath, { content, mtime, language });
+
+                // Analyze imports for this file
+                if (ImportAnalyzer.isLanguageSupported(language)) {
+                    this.importAnalyzer.analyzeFile(content, language, relativePath);
+                }
+            } catch (error) {
+                skippedFilesCount++;
+                console.warn(`⚠️  Skipping file ${filePath} during import analysis: ${error}`);
+            }
+        }
+
+        // Build import graph after ALL files are analyzed (before chunk processing)
+        const importGraph = this.importAnalyzer.buildImportGraph();
+        this.importFrequencyMap = importGraph.frequency;
+
+        // Calculate and store global max import count for consistent ranking normalization
+        const globalMaxImportCount = Math.max(0, ...Object.values(this.importFrequencyMap));
+        if (globalMaxImportCount > 0) {
+            this.rankingConfig.globalMaxImportCount = globalMaxImportCount;
+            this.ranker.updateConfig({ globalMaxImportCount });
+        }
+
+        // Log import analysis summary with skipped file count for visibility
+        const analyzedCount = filePaths.length - skippedFilesCount;
+        console.log(`📊 Import analysis complete: ${analyzedCount} files analyzed${skippedFilesCount > 0 ? `, ${skippedFilesCount} skipped` : ''}, ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files (max: ${globalMaxImportCount})`);
+
+        return fileContents;
+    }
+
+    /**
+     * Pass 2: Process chunks from files using pre-computed import counts
+     *
+     * @param fileContents Map of filePath -> file content data (from pass 1)
+     * @param filePaths Original file paths array (for iteration order)
+     * @param codebasePath Base path for the codebase
+     * @param onFileProcessed Callback called when each file is processed
+     * @returns Object with processed file count and total chunk count
+     */
+    private async processChunksPass(
+        fileContents: Map<string, { content: string; mtime: number; language: string }>,
         filePaths: string[],
         codebasePath: string,
         onFileProcessed?: (filePath: string, fileIndex: number, totalFiles: number) => void
-    ): Promise<{ processedFiles: number; totalChunks: number; status: 'completed' | 'limit_reached' }> {
+    ): Promise<{ processedFiles: number; totalChunks: number; failedChunks: number; limitReached: boolean }> {
         const isHybrid = this.getIsHybrid();
         const EMBEDDING_BATCH_SIZE = Math.max(1, parseInt(envManager.get('EMBEDDING_BATCH_SIZE') || '100', 10));
         const CHUNK_LIMIT = 450000;
-        console.log(`🔧 Using EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE}`);
 
-        let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string }> = [];
+        console.log(`📝 Pass 2: Processing chunks...`);
+        let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }> = [];
         let processedFiles = 0;
-        let totalChunks = 0;
+        let totalChunks = 0; // Only counts successfully stored chunks
+        let failedChunks = 0;
         let limitReached = false;
 
         for (let i = 0; i < filePaths.length; i++) {
             const filePath = filePaths[i];
+            const fileData = fileContents.get(filePath);
+
+            // Skip files that failed during pass 1
+            if (!fileData) {
+                continue;
+            }
 
             try {
-                const content = await fs.promises.readFile(filePath, 'utf-8');
-                const language = this.getLanguageFromFilePath(filePath);
+                const { content, mtime, language } = fileData;
+
                 const chunks = await this.codeSplitter.split(content, language, filePath);
 
                 // Log files with many chunks or large content
@@ -733,19 +851,22 @@ export class Context {
 
                 // Add chunks to buffer
                 for (const chunk of chunks) {
-                    chunkBuffer.push({ chunk, codebasePath });
-                    totalChunks++;
+                    chunkBuffer.push({ chunk, codebasePath, mtime });
 
                     // Process batch when buffer reaches EMBEDDING_BATCH_SIZE
                     if (chunkBuffer.length >= EMBEDDING_BATCH_SIZE) {
+                        const batchSize = chunkBuffer.length;
                         try {
                             await this.processChunkBuffer(chunkBuffer);
+                            // Only count chunks as "total" after successful storage
+                            totalChunks += batchSize;
                         } catch (error) {
                             const searchType = isHybrid === true ? 'hybrid' : 'regular';
                             console.error(`❌ Failed to process chunk batch for ${searchType}:`, error);
                             if (error instanceof Error) {
                                 console.error('Stack trace:', error.stack);
                             }
+                            failedChunks += batchSize;
                         } finally {
                             chunkBuffer = []; // Always clear buffer, even on failure
                         }
@@ -774,33 +895,76 @@ export class Context {
         // Process any remaining chunks in the buffer
         if (chunkBuffer.length > 0) {
             const searchType = isHybrid === true ? 'hybrid' : 'regular';
-            console.log(`📝 Processing final batch of ${chunkBuffer.length} chunks for ${searchType}`);
+            const batchSize = chunkBuffer.length;
+            console.log(`📝 Processing final batch of ${batchSize} chunks for ${searchType}`);
             try {
                 await this.processChunkBuffer(chunkBuffer);
+                // Only count chunks as "total" after successful storage
+                totalChunks += batchSize;
             } catch (error) {
                 console.error(`❌ Failed to process final chunk batch for ${searchType}:`, error);
                 if (error instanceof Error) {
                     console.error('Stack trace:', error.stack);
                 }
+                failedChunks += batchSize;
             }
         }
+
+        // Log warning if some chunks failed
+        if (failedChunks > 0) {
+            console.warn(`⚠️  Indexing completed with ${failedChunks} failed chunks out of ${totalChunks} total`);
+        }
+
+        return { processedFiles, totalChunks, failedChunks, limitReached };
+    }
+
+    /**
+ * Process a list of files with streaming chunk processing
+ * @param filePaths Array of file paths to process
+ * @param codebasePath Base path for the codebase
+ * @param onFileProcessed Callback called when each file is processed
+ * @returns Object with processed file count and total chunk count
+ */
+    private async processFileList(
+        filePaths: string[],
+        codebasePath: string,
+        onFileProcessed?: (filePath: string, fileIndex: number, totalFiles: number) => void
+    ): Promise<{ processedFiles: number; totalChunks: number; failedChunks: number; status: 'completed' | 'partial' | 'limit_reached' }> {
+        const EMBEDDING_BATCH_SIZE = Math.max(1, parseInt(envManager.get('EMBEDDING_BATCH_SIZE') || '100', 10));
+        console.log(`🔧 Using EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE}`);
+
+        // Reset import analyzer for this indexing operation
+        this.importAnalyzer.reset();
+
+        // Pass 1: Analyze imports from all files
+        const fileContents = await this.analyzeImportsPass(filePaths, codebasePath);
+
+        // Pass 2: Process chunks with correct import counts
+        const { processedFiles, totalChunks, failedChunks, limitReached } = await this.processChunksPass(
+            fileContents,
+            filePaths,
+            codebasePath,
+            onFileProcessed
+        );
 
         return {
             processedFiles,
             totalChunks,
-            status: limitReached ? 'limit_reached' : 'completed'
+            failedChunks,
+            status: limitReached ? 'limit_reached' : (failedChunks > 0 ? 'partial' : 'completed')
         };
     }
 
     /**
  * Process accumulated chunk buffer
  */
-    private async processChunkBuffer(chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string }>): Promise<void> {
+    private async processChunkBuffer(chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }>): Promise<void> {
         if (chunkBuffer.length === 0) return;
 
         // Extract chunks and ensure they all have the same codebasePath
         const chunks = chunkBuffer.map(item => item.chunk);
         const codebasePath = chunkBuffer[0].codebasePath;
+        const mtimes = chunkBuffer.map(item => item.mtime);
 
         // Estimate tokens (rough estimation: 1 token ≈ 4 characters)
         const estimatedTokens = chunks.reduce((sum, chunk) => sum + Math.ceil(chunk.content.length / 4), 0);
@@ -808,13 +972,13 @@ export class Context {
         const isHybrid = this.getIsHybrid();
         const searchType = isHybrid === true ? 'hybrid' : 'regular';
         console.log(`🔄 Processing batch of ${chunks.length} chunks (~${estimatedTokens} tokens) for ${searchType}`);
-        await this.processChunkBatch(chunks, codebasePath);
+        await this.processChunkBatch(chunks, codebasePath, mtimes);
     }
 
     /**
      * Process a batch of chunks
      */
-    private async processChunkBatch(chunks: CodeChunk[], codebasePath: string): Promise<void> {
+    private async processChunkBatch(chunks: CodeChunk[], codebasePath: string, mtimes: number[]): Promise<void> {
         const isHybrid = this.getIsHybrid();
 
         // Generate embedding vectors
@@ -834,6 +998,9 @@ export class Context {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { filePath: _fp, startLine: _sl, endLine: _el, ...restMetadata } = chunk.metadata;
 
+                // Get import count using path-aware matching (handles relative vs absolute paths)
+                const importCount = this.importAnalyzer.getImportersOfFile(relativePath).length;
+
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
                     content: chunk.content, // Full text content for BM25 and storage
@@ -842,11 +1009,13 @@ export class Context {
                     startLine: chunk.metadata.startLine || 0,
                     endLine: chunk.metadata.endLine || 0,
                     fileExtension,
+                    mtime: mtimes[index],
                     metadata: {
                         ...restMetadata,
                         codebasePath,
                         language: chunk.metadata.language || 'unknown',
-                        chunkIndex: index
+                        chunkIndex: index,
+                        importCount
                     }
                 };
             });
@@ -866,6 +1035,9 @@ export class Context {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { filePath: _fp2, startLine: _sl2, endLine: _el2, ...restMetadata } = chunk.metadata;
 
+                // Get import count using path-aware matching (handles relative vs absolute paths)
+                const importCount = this.importAnalyzer.getImportersOfFile(relativePath).length;
+
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
                     vector: embeddings[index].vector,
@@ -874,11 +1046,13 @@ export class Context {
                     startLine: chunk.metadata.startLine || 0,
                     endLine: chunk.metadata.endLine || 0,
                     fileExtension,
+                    mtime: mtimes[index],
                     metadata: {
                         ...restMetadata,
                         codebasePath,
                         language: chunk.metadata.language || 'unknown',
-                        chunkIndex: index
+                        chunkIndex: index,
+                        importCount
                     }
                 };
             });

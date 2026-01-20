@@ -458,6 +458,7 @@ export class LanceDBVectorDatabase implements VectorDatabase {
                     startLine: result.startLine,
                     endLine: result.endLine,
                     fileExtension: result.fileExtension,
+                    mtime: result.mtime || 0,
                     metadata: JSON.parse(result.metadata || '{}'),
                 },
                 score: result._score || result._distance || 0,

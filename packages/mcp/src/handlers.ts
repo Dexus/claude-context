@@ -1,8 +1,7 @@
 import * as fs from "fs";
-import * as path from "path";
 import { Context, COLLECTION_LIMIT_MESSAGE } from "@dannyboy2042/claude-context-core";
 import { SnapshotManager } from "./snapshot.js";
-import { ensureAbsolutePath, truncateContent, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
+import { ensureAbsolutePath, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
 
 export class ToolHandlers {
@@ -520,7 +519,7 @@ export class ToolHandlers {
     }
 
     public async handleSearchCode(args: any) {
-        const { path: codebasePath, query, limit = 10, extensionFilter } = args;
+        const { path: codebasePath, query, limit = 10, extensionFilter, enableRanking = true } = args;
         const resultLimit = limit || 10;
 
         try {
@@ -547,7 +546,8 @@ export class ToolHandlers {
                 query,
                 Math.min(resultLimit, 50),
                 0.3,
-                filterExpr
+                filterExpr,
+                enableRanking
             );
 
             console.log(`[SEARCH] ✅ Search completed! Found ${searchResults.length} results using ${embeddingProvider.getProvider()} embeddings`);

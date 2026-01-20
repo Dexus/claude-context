@@ -42,7 +42,7 @@ jest.mock('../splitter/langchain-splitter', () => ({
 // Mock OpenAI embedding to avoid API calls
 jest.mock('../embedding/openai-embedding', () => ({
     OpenAIEmbedding: class MockOpenAIEmbedding {
-        async embed(text: string) {
+        async embed(_text: string) {
             return { vector: Array(1536).fill(0.1), dimension: 1536 };
         }
         async embedBatch(texts: string[]) {
@@ -781,11 +781,15 @@ describe('Context', () => {
                         startLine: 1,
                         endLine: 10,
                         fileExtension: '.ts',
+                        mtime: Date.now(),
                         metadata: { language: 'typescript' }
                     },
                     score: 0.9
                 }
             ]);
+
+            // Disable ranking for this test to verify exact mock scores
+            context.updateRankingConfig({ enabled: false });
 
             const results = await context.semanticSearch('/test/path', 'test query');
 
@@ -831,11 +835,15 @@ describe('Context', () => {
                         startLine: 5,
                         endLine: 10,
                         fileExtension: '.ts',
+                        mtime: Date.now(),
                         metadata: { language: 'typescript' }
                     },
                     score: 0.85
                 }
             ]);
+
+            // Disable ranking for this test to verify exact mock scores
+            context.updateRankingConfig({ enabled: false });
 
             const results = await context.semanticSearch('/test/path', 'test function');
 
