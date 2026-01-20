@@ -43,14 +43,14 @@ Natural language queries are processed using both dense vector embeddings and BM
 
 ## Architecture Components
 
-### Core Engine (`@dannyboy2042/claude-context-core`)
+### Core Engine (`@dexus1985/claude-context-core`)
 The foundational indexing engine that handles:
 - Code parsing and analysis
 - Embedding generation
 - Vector database operations
 - Search algorithms
 
-### MCP Server (`@zilliz/claude-context-mcp`)
+### MCP Server (`@dexus1985/claude-context-mcp`)
 Model Context Protocol server that enables integration with AI assistants:
 - Standardized tool interface
 - Compatible with Claude Code, Cursor, Windsurf, and more

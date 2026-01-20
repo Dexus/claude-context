@@ -1,17 +1,17 @@
-# @dannyboy2042/claude-context-core
+# @dexus1985/claude-context-core
 ![](../../assets/claude-context.png)
 
 The core indexing engine for Claude Context - a powerful tool for semantic search and analysis of codebases using vector embeddings and AI.
 
-[![npm version](https://img.shields.io/npm/v/@dannyboy2042/claude-context-core.svg)](https://www.npmjs.com/package/@dannyboy2042/claude-context-core)
-[![npm downloads](https://img.shields.io/npm/dm/@dannyboy2042/claude-context-core.svg)](https://www.npmjs.com/package/@dannyboy2042/claude-context-core)
+[![npm version](https://img.shields.io/npm/v/@dexus1985/claude-context-core.svg)](https://www.npmjs.com/package/@dexus1985/claude-context-core)
+[![npm downloads](https://img.shields.io/npm/dm/@dexus1985/claude-context-core.svg)](https://www.npmjs.com/package/@dexus1985/claude-context-core)
 
 > 📖 **New to Claude Context?** Check out the [main project README](../../README.md) for an overview and quick start guide.
 
 ## Installation
 
 ```bash
-npm install @dannyboy2042/claude-context-core
+npm install @dexus1985/claude-context-core
 ```
 
 ### Prepare Environment Variables
@@ -58,7 +58,7 @@ import {
   Context, 
   OpenAIEmbedding, 
   LanceDBVectorDatabase 
-} from '@dannyboy2042/claude-context-core';
+} from '@dexus1985/claude-context-core';
 
 // Initialize embedding provider
 const embedding = new OpenAIEmbedding({
@@ -190,7 +190,7 @@ interface SemanticSearchResult {
 ### Using VoyageAI Embeddings
 
 ```typescript
-import { Context, LanceDBVectorDatabase, VoyageAIEmbedding } from '@dannyboy2042/claude-context-core';
+import { Context, LanceDBVectorDatabase, VoyageAIEmbedding } from '@dexus1985/claude-context-core';
 
 // Initialize with VoyageAI embedding provider
 const embedding = new VoyageAIEmbedding({

@@ -1,4 +1,4 @@
-# Contributing to @dannyboy2042/claude-context-core
+# Contributing to @dexus1985/claude-context-core
 
 Thanks for your interest in contributing to the Claude Context core package!
 

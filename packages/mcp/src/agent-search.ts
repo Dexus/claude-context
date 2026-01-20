@@ -1,4 +1,4 @@
-import { Context, AgentSearchStrategy, AgentSearchResult, AgentSearchStep, SemanticSearchResult } from "@dannyboy2042/claude-context-core";
+import { Context, AgentSearchStrategy, AgentSearchResult, AgentSearchStep, SemanticSearchResult } from "@dexus1985/claude-context-core";
 
 /**
  * AgentSearch - Orchestrates multi-step, iterative code searches

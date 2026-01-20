@@ -26,7 +26,7 @@ Get a free API key from [OpenAI](https://platform.openai.com/api-keys) (starts w
 
 ### Step 2: Add to Claude Code
 ```bash
-claude mcp add claude-context -e OPENAI_API_KEY=your-openai-api-key -- npx @dannyboy2042/claude-context-mcp@latest
+claude mcp add claude-context -e OPENAI_API_KEY=your-openai-api-key -- npx @dexus1985/claude-context-mcp@latest
 ```
 
 **That's it!** 🎉 Claude Context will:
@@ -67,7 +67,7 @@ Create or edit the `~/.gemini/settings.json` file:
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key"
       }
@@ -88,7 +88,7 @@ Create or edit the `~/.qwen/settings.json` file:
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key"
       }
@@ -114,7 +114,7 @@ Add this to your Cursor `~/.cursor/mcp.json` file:
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["-y", "@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["-y", "@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key"
       }
@@ -137,7 +137,7 @@ Add the following configuration to your Void MCP settings:
   "mcpServers": {
     "code-context": {
       "command": "npx",
-      "args": ["-y", "@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["-y", "@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -158,7 +158,7 @@ Add to your Claude Desktop configuration:
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -179,7 +179,7 @@ Windsurf supports MCP configuration through a JSON file. Add the following confi
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["-y", "@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["-y", "@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -200,7 +200,7 @@ The Claude Context MCP server integrates directly with Claude Code and other MCP
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["-y", "@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["-y", "@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -221,7 +221,7 @@ Cherry Studio allows for visual MCP server configuration through its settings in
    - **Name**: `claude-context`
    - **Type**: `STDIO`
    - **Command**: `npx`
-   - **Arguments**: `["@dannyboy2042/claude-context-mcp@latest"]`
+   - **Arguments**: `["@dexus1985/claude-context-mcp@latest"]`
    - **Environment Variables**:
      - `OPENAI_API_KEY`: `your-openai-api-key`
      - `MILVUS_ADDRESS`: `milvus-cloud-public-endpoint`
@@ -246,7 +246,7 @@ Cline uses a JSON configuration file to manage MCP servers. To integrate the pro
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -277,7 +277,7 @@ To configure Claude Context MCP in Augment Code, you can use either the graphica
 5. Enter the following command:
 
    ```
-   npx @dannyboy2042/claude-context-mcp@latest
+   npx @dexus1985/claude-context-mcp@latest
    ```
 
 6. Name the MCP: **Claude Context**.
@@ -299,7 +299,7 @@ To configure Claude Context MCP in Augment Code, you can use either the graphica
     { 
       "name": "claude-context", 
       "command": "npx", 
-      "args": ["-y", "@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["-y", "@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -324,7 +324,7 @@ Roo Code utilizes a JSON configuration file for MCP servers:
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["@dannyboy2042/claude-context-mcp@latest"],
+      "args": ["@dexus1985/claude-context-mcp@latest"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
       }
@@ -344,7 +344,7 @@ Roo Code utilizes a JSON configuration file for MCP servers:
 The server uses stdio transport and follows the standard MCP protocol. It can be integrated with any MCP-compatible client by running:
 
 ```bash
-npx @dannyboy2042/claude-context-mcp@latest
+npx @dexus1985/claude-context-mcp@latest
 ```
 
 </details>
@@ -376,8 +376,8 @@ For more detailed MCP environment variable configuration, see our [Environment V
 ### Core Components
 Claude Context is a monorepo containing three main packages:
 
-- **`@dannyboy2042/claude-context-core`**: Core indexing engine with embedding and vector database integration
-- **`@dannyboy2042/claude-context-mcp`**: Model Context Protocol server for AI agent integration
+- **`@dexus1985/claude-context-core`**: Core indexing engine with embedding and vector database integration
+- **`@dexus1985/claude-context-mcp`**: Model Context Protocol server for AI agent integration
 
 ### Supported Technologies
 - **Vector Database**: [LanceDB](https://lancedb.github.io/lancedb/) (local, embedded, zero-config) 
@@ -391,7 +391,7 @@ Claude Context is a monorepo containing three main packages:
 
 For enterprise teams or advanced use cases, you can optionally configure Milvus/Zilliz Cloud by setting environment variables:
 ```bash
-claude mcp add claude-context -e OPENAI_API_KEY=your-key -e VECTOR_DB_TYPE=milvus -e MILVUS_TOKEN=your-token -- npx @dannyboy2042/claude-context-mcp@latest
+claude mcp add claude-context -e OPENAI_API_KEY=your-key -e VECTOR_DB_TYPE=milvus -e MILVUS_TOKEN=your-token -- npx @dexus1985/claude-context-mcp@latest
 ```
 </details>
 
@@ -403,10 +403,10 @@ The MCP server is the primary way to use Claude Context with AI assistants like 
 
 ### Build Applications with Core Package
 
-The `@dannyboy2042/claude-context-core` package provides the fundamental functionality for code indexing and semantic search.
+The `@dexus1985/claude-context-core` package provides the fundamental functionality for code indexing and semantic search.
 
 ```typescript
-import { Context, LanceDBVectorDatabase, OpenAIEmbedding } from '@dannyboy2042/claude-context-core';
+import { Context, LanceDBVectorDatabase, OpenAIEmbedding } from '@dexus1985/claude-context-core';
 
 // Initialize embedding provider
 const embedding = new OpenAIEmbedding({

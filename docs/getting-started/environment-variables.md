@@ -62,7 +62,7 @@ EOF
 
 **Claude Code:**
 ```bash
-claude mcp add claude-context -- npx @zilliz/claude-context-mcp@latest
+claude mcp add claude-context -- npx @dexus1985/claude-context-mcp@latest
 ```
 
 **Cursor/Windsurf/Others:**
@@ -71,7 +71,7 @@ claude mcp add claude-context -- npx @zilliz/claude-context-mcp@latest
   "mcpServers": {
     "claude-context": {
       "command": "npx",
-      "args": ["-y", "@zilliz/claude-context-mcp@latest"]
+      "args": ["-y", "@dexus1985/claude-context-mcp@latest"]
     }
   }
 }

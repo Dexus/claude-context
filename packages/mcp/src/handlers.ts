@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { Context, COLLECTION_LIMIT_MESSAGE } from "@dannyboy2042/claude-context-core";
+import { Context, COLLECTION_LIMIT_MESSAGE } from "@dexus1985/claude-context-core";
 import { SnapshotManager } from "./snapshot.js";
 import { ensureAbsolutePath, trackCodebasePath, buildExtensionFilterExpression, formatSearchResult } from "./utils.js";
 import { AgentSearch } from "./agent-search.js";
@@ -455,7 +455,7 @@ export class ToolHandlers {
             await this.context.getLoadedIgnorePatterns(absolutePath);
 
             // Initialize file synchronizer with proper ignore patterns (including project-specific patterns)
-            const { FileSynchronizer } = await import("@dannyboy2042/claude-context-core");
+            const { FileSynchronizer } = await import("@dexus1985/claude-context-core");
             const ignorePatterns = this.context.getIgnorePatterns() || [];
             console.log(`[BACKGROUND-INDEX] Using ignore patterns: ${ignorePatterns.join(', ')}`);
             const synchronizer = new FileSynchronizer(absolutePath, ignorePatterns);

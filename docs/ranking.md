@@ -58,7 +58,7 @@ Direct keyword matching provides an additional relevance signal:
 ### Using the Core API
 
 ```typescript
-import { Context } from '@dannyboy2042/claude-context-core';
+import { Context } from '@dexus1985/claude-context-core';
 
 const context = new Context(config);
 
@@ -178,7 +178,7 @@ Claude Context includes a comprehensive A/B testing framework to measure ranking
 ### Running A/B Tests
 
 ```typescript
-import { ABTest } from '@dannyboy2042/claude-context-core';
+import { ABTest } from '@dexus1985/claude-context-core';
 
 // Define test queries with known relevant documents
 const testQueries = [

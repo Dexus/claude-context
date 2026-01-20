@@ -5,18 +5,18 @@
     "private": true,
     "scripts": {
         "build": "pnpm -r --filter='!./examples/*' build && pnpm -r --filter='./examples/*' build",
-        "build:core": "pnpm --filter @dannyboy2042/claude-context-core build",
-        "build:mcp": "pnpm --filter @dannyboy2042/claude-context-mcp build",
+        "build:core": "pnpm --filter @dexus1985/claude-context-core build",
+        "build:mcp": "pnpm --filter @dexus1985/claude-context-mcp build",
         "dev": "pnpm -r dev",
-        "dev:core": "pnpm --filter @dannyboy2042/claude-context-core dev",
-        "dev:mcp": "pnpm --filter @dannyboy2042/claude-context-mcp dev",
+        "dev:core": "pnpm --filter @dexus1985/claude-context-core dev",
+        "dev:mcp": "pnpm --filter @dexus1985/claude-context-mcp dev",
         "clean": "pnpm -r clean",
         "lint": "pnpm -r lint",
         "lint:fix": "pnpm -r run lint:fix",
         "typecheck": "pnpm -r run typecheck",
-        "test:core": "pnpm --filter @dannyboy2042/claude-context-core test",
-        "release:core": "pnpm --filter @dannyboy2042/claude-context-core... run build && pnpm --filter @dannyboy2042/claude-context-core publish --access public --no-git-checks",
-        "release:mcp": "pnpm --filter @dannyboy2042/claude-context-mcp... run build && pnpm --filter @dannyboy2042/claude-context-mcp publish --access public --no-git-checks"
+        "test:core": "pnpm --filter @dexus1985/claude-context-core test",
+        "release:core": "pnpm --filter @dexus1985/claude-context-core... run build && pnpm --filter @dexus1985/claude-context-core publish --access public --no-git-checks",
+        "release:mcp": "pnpm --filter @dexus1985/claude-context-mcp... run build && pnpm --filter @dexus1985/claude-context-mcp publish --access public --no-git-checks"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.2",

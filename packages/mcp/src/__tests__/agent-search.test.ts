@@ -1,5 +1,5 @@
 import { jest, describe, it, expect } from '@jest/globals';
-import { Context, SemanticSearchResult } from "@dannyboy2042/claude-context-core";
+import { Context, SemanticSearchResult } from "@dexus1985/claude-context-core";
 import { AgentSearch } from "../agent-search.js";
 
 // Create mock Context

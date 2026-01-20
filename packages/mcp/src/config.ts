@@ -1,4 +1,4 @@
-import { envManager } from "@dannyboy2042/claude-context-core";
+import { envManager } from "@dexus1985/claude-context-core";
 
 export interface ContextMcpConfig {
     name: string;
@@ -128,7 +128,7 @@ export function showHelpMessage(): void {
     console.log(`
 Context MCP Server
 
-Usage: npx @zilliz/claude-context-mcp@latest [options]
+Usage: npx @dexus1985/claude-context-mcp@latest [options]
 
 Options:
   --help, -h                          Show this help message
@@ -157,18 +157,18 @@ Environment Variables:
 
 Examples:
   # Start MCP server with OpenAI (default) and explicit Milvus address
-  OPENAI_API_KEY=sk-xxx MILVUS_ADDRESS=localhost:19530 npx @zilliz/claude-context-mcp@latest
+  OPENAI_API_KEY=sk-xxx MILVUS_ADDRESS=localhost:19530 npx @dexus1985/claude-context-mcp@latest
   
   # Start MCP server with OpenAI and auto-resolve Milvus address from token
-  OPENAI_API_KEY=sk-xxx MILVUS_TOKEN=your-zilliz-token npx @zilliz/claude-context-mcp@latest
+  OPENAI_API_KEY=sk-xxx MILVUS_TOKEN=your-zilliz-token npx @dexus1985/claude-context-mcp@latest
   
   # Start MCP server with VoyageAI
-  EMBEDDING_PROVIDER=VoyageAI VOYAGEAI_API_KEY=pa-xxx MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
+  EMBEDDING_PROVIDER=VoyageAI VOYAGEAI_API_KEY=pa-xxx MILVUS_TOKEN=your-token npx @dexus1985/claude-context-mcp@latest
   
   # Start MCP server with Gemini
-  EMBEDDING_PROVIDER=Gemini GEMINI_API_KEY=xxx MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
+  EMBEDDING_PROVIDER=Gemini GEMINI_API_KEY=xxx MILVUS_TOKEN=your-token npx @dexus1985/claude-context-mcp@latest
   
   # Start MCP server with Ollama
-  EMBEDDING_PROVIDER=Ollama EMBEDDING_MODEL=nomic-embed-text MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
+  EMBEDDING_PROVIDER=Ollama EMBEDDING_MODEL=nomic-embed-text MILVUS_TOKEN=your-token npx @dexus1985/claude-context-mcp@latest
         `);
 } 

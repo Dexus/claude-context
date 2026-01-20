@@ -23,8 +23,8 @@ Welcome to the Claude Context documentation! Claude Context is a powerful tool t
 
 - [GitHub Repository](https://github.com/danielbowne/claude-context)
 - [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=zilliz.semanticcodesearch)
-- [npm - Core Package](https://www.npmjs.com/package/@dannyboy2042/claude-context-core)
-- [npm - MCP Server](https://www.npmjs.com/package/@dannyboy2042/claude-context-mcp)
+- [npm - Core Package](https://www.npmjs.com/package/@dexus1985/claude-context-core)
+- [npm - MCP Server](https://www.npmjs.com/package/@dexus1985/claude-context-mcp)
 - [Zilliz Cloud](https://cloud.zilliz.com)
 
 ## 💬 Support

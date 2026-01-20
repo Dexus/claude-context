@@ -1,5 +1,5 @@
 {
-    "name": "@dannyboy2042/claude-context-mcp",
+    "name": "@dexus1985/claude-context-mcp",
     "version": "0.2.0",
     "description": "Model Context Protocol integration for Claude Context",
     "type": "module",
@@ -20,7 +20,7 @@
         "prepublishOnly": "yarn build"
     },
     "dependencies": {
-        "@dannyboy2042/claude-context-core": "workspace:*",
+        "@dexus1985/claude-context-core": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.25.2",
         "zod": "^4.3.5"
     },
