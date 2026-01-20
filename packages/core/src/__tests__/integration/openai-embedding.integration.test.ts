@@ -5,7 +5,7 @@
  * - OPENAI_API_KEY: Your OpenAI API key
  *
  * To run these tests:
- * OPENAI_API_KEY=sk-xxx npm test -- --testPathPatterns="integration/openai"
+ * OPENAI_API_KEY=sk-xxx pnpm test -- --testPathPattern="integration/openai"
  */
 
 import { OpenAIEmbedding } from '../../embedding/openai-embedding';

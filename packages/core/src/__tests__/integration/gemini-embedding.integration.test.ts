@@ -5,7 +5,7 @@
  * - GEMINI_API_KEY: Your Google AI API key (or GOOGLE_AI_API_KEY)
  *
  * To run these tests:
- * GEMINI_API_KEY=xxx npm test -- --testPathPatterns="integration/gemini"
+ * GEMINI_API_KEY=xxx pnpm test -- --testPathPattern="integration/gemini"
  */
 
 import { GeminiEmbedding } from '../../embedding/gemini-embedding';

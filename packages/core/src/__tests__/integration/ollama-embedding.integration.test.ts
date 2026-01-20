@@ -13,7 +13,7 @@
  * 3. Ensure Ollama is running: ollama serve
  *
  * To run these tests:
- * OLLAMA_ENABLED=true npm test -- --testPathPatterns="integration/ollama"
+ * OLLAMA_ENABLED=true pnpm test -- --testPathPattern="integration/ollama"
  */
 
 import { OllamaEmbedding } from '../../embedding/ollama-embedding';
@@ -190,5 +190,5 @@ function fibonacci(n) {
 // Log skip message if not enabled
 if (!OLLAMA_ENABLED) {
     console.log('⏭️  Skipping Ollama integration tests (OLLAMA_ENABLED not set to "true")');
-    console.log('   To run: OLLAMA_ENABLED=true npm test -- --testPathPatterns="integration/ollama"');
+    console.log('   To run: OLLAMA_ENABLED=true pnpm test -- --testPathPattern="integration/ollama"');
 }

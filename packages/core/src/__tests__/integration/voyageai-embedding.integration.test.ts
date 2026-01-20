@@ -5,7 +5,7 @@
  * - VOYAGEAI_API_KEY: Your VoyageAI API key
  *
  * To run these tests:
- * VOYAGEAI_API_KEY=xxx npm test -- --testPathPatterns="integration/voyageai"
+ * VOYAGEAI_API_KEY=xxx pnpm test -- --testPathPattern="integration/voyageai"
  */
 
 import { VoyageAIEmbedding } from '../../embedding/voyageai-embedding';
