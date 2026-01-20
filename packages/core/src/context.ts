@@ -744,29 +744,20 @@ export class Context {
     }
 
     /**
- * Process a list of files with streaming chunk processing
- * @param filePaths Array of file paths to process
- * @param codebasePath Base path for the codebase
- * @param onFileProcessed Callback called when each file is processed
- * @returns Object with processed file count and total chunk count
- */
-    private async processFileList(
+     * Pass 1: Analyze imports from all files to build import frequency map
+     * This must complete before chunk processing to ensure correct import counts
+     *
+     * @param filePaths Array of file paths to analyze
+     * @param codebasePath Base path for the codebase
+     * @returns Map of filePath -> file content data (for reuse in pass 2)
+     */
+    private async analyzeImportsPass(
         filePaths: string[],
-        codebasePath: string,
-        onFileProcessed?: (filePath: string, fileIndex: number, totalFiles: number) => void
-    ): Promise<{ processedFiles: number; totalChunks: number; failedChunks: number; status: 'completed' | 'partial' | 'limit_reached' }> {
-        const isHybrid = this.getIsHybrid();
-        const EMBEDDING_BATCH_SIZE = Math.max(1, parseInt(envManager.get('EMBEDDING_BATCH_SIZE') || '100', 10));
-        const CHUNK_LIMIT = 450000;
-        console.log(`🔧 Using EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE}`);
-
-        // Reset import analyzer for this indexing operation
-        this.importAnalyzer.reset();
-
-        // PASS 1: Analyze all files for imports first (before processing chunks)
-        // This ensures importFrequencyMap is populated before chunks are indexed
+        codebasePath: string
+    ): Promise<Map<string, { content: string; mtime: number; language: string }>> {
         console.log(`📊 Pass 1: Analyzing imports across ${filePaths.length} files...`);
         const fileContents = new Map<string, { content: string; mtime: number; language: string }>();
+        let skippedFilesCount = 0;
 
         for (const filePath of filePaths) {
             try {
@@ -784,6 +775,7 @@ export class Context {
                     this.importAnalyzer.analyzeFile(content, language, relativePath);
                 }
             } catch (error) {
+                skippedFilesCount++;
                 console.warn(`⚠️  Skipping file ${filePath} during import analysis: ${error}`);
             }
         }
@@ -799,13 +791,36 @@ export class Context {
             this.ranker.updateConfig({ globalMaxImportCount });
         }
 
-        console.log(`📊 Import analysis complete: ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files (max: ${globalMaxImportCount})`);
+        // Log import analysis summary with skipped file count for visibility
+        const analyzedCount = filePaths.length - skippedFilesCount;
+        console.log(`📊 Import analysis complete: ${analyzedCount} files analyzed${skippedFilesCount > 0 ? `, ${skippedFilesCount} skipped` : ''}, ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files (max: ${globalMaxImportCount})`);
 
-        // PASS 2: Process chunks with correct import counts
+        return fileContents;
+    }
+
+    /**
+     * Pass 2: Process chunks from files using pre-computed import counts
+     *
+     * @param fileContents Map of filePath -> file content data (from pass 1)
+     * @param filePaths Original file paths array (for iteration order)
+     * @param codebasePath Base path for the codebase
+     * @param onFileProcessed Callback called when each file is processed
+     * @returns Object with processed file count and total chunk count
+     */
+    private async processChunksPass(
+        fileContents: Map<string, { content: string; mtime: number; language: string }>,
+        filePaths: string[],
+        codebasePath: string,
+        onFileProcessed?: (filePath: string, fileIndex: number, totalFiles: number) => void
+    ): Promise<{ processedFiles: number; totalChunks: number; failedChunks: number; limitReached: boolean }> {
+        const isHybrid = this.getIsHybrid();
+        const EMBEDDING_BATCH_SIZE = Math.max(1, parseInt(envManager.get('EMBEDDING_BATCH_SIZE') || '100', 10));
+        const CHUNK_LIMIT = 450000;
+
         console.log(`📝 Pass 2: Processing chunks...`);
         let chunkBuffer: Array<{ chunk: CodeChunk; codebasePath: string; mtime: number }> = [];
         let processedFiles = 0;
-        let totalChunks = 0;
+        let totalChunks = 0; // Only counts successfully stored chunks
         let failedChunks = 0;
         let limitReached = false;
 
@@ -833,13 +848,14 @@ export class Context {
                 // Add chunks to buffer
                 for (const chunk of chunks) {
                     chunkBuffer.push({ chunk, codebasePath, mtime });
-                    totalChunks++;
 
                     // Process batch when buffer reaches EMBEDDING_BATCH_SIZE
                     if (chunkBuffer.length >= EMBEDDING_BATCH_SIZE) {
                         const batchSize = chunkBuffer.length;
                         try {
                             await this.processChunkBuffer(chunkBuffer);
+                            // Only count chunks as "total" after successful storage
+                            totalChunks += batchSize;
                         } catch (error) {
                             const searchType = isHybrid === true ? 'hybrid' : 'regular';
                             console.error(`❌ Failed to process chunk batch for ${searchType}:`, error);
@@ -879,6 +895,8 @@ export class Context {
             console.log(`📝 Processing final batch of ${batchSize} chunks for ${searchType}`);
             try {
                 await this.processChunkBuffer(chunkBuffer);
+                // Only count chunks as "total" after successful storage
+                totalChunks += batchSize;
             } catch (error) {
                 console.error(`❌ Failed to process final chunk batch for ${searchType}:`, error);
                 if (error instanceof Error) {
@@ -892,6 +910,38 @@ export class Context {
         if (failedChunks > 0) {
             console.warn(`⚠️  Indexing completed with ${failedChunks} failed chunks out of ${totalChunks} total`);
         }
+
+        return { processedFiles, totalChunks, failedChunks, limitReached };
+    }
+
+    /**
+ * Process a list of files with streaming chunk processing
+ * @param filePaths Array of file paths to process
+ * @param codebasePath Base path for the codebase
+ * @param onFileProcessed Callback called when each file is processed
+ * @returns Object with processed file count and total chunk count
+ */
+    private async processFileList(
+        filePaths: string[],
+        codebasePath: string,
+        onFileProcessed?: (filePath: string, fileIndex: number, totalFiles: number) => void
+    ): Promise<{ processedFiles: number; totalChunks: number; failedChunks: number; status: 'completed' | 'partial' | 'limit_reached' }> {
+        const EMBEDDING_BATCH_SIZE = Math.max(1, parseInt(envManager.get('EMBEDDING_BATCH_SIZE') || '100', 10));
+        console.log(`🔧 Using EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE}`);
+
+        // Reset import analyzer for this indexing operation
+        this.importAnalyzer.reset();
+
+        // Pass 1: Analyze imports from all files
+        const fileContents = await this.analyzeImportsPass(filePaths, codebasePath);
+
+        // Pass 2: Process chunks with correct import counts
+        const { processedFiles, totalChunks, failedChunks, limitReached } = await this.processChunksPass(
+            fileContents,
+            filePaths,
+            codebasePath,
+            onFileProcessed
+        );
 
         return {
             processedFiles,

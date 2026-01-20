@@ -158,8 +158,13 @@ export class ImportAnalyzer {
     private extractJavaScriptImports(line: string, language: string, filePath: string, lineNumber: number): ImportInfo[] {
         const imports: ImportInfo[] = [];
 
-        // ES6 import: import foo from 'module' (also handles 'import type')
-        const es6ImportMatch = line.match(/import\s+(?:type\s+)?(?:(?:\*\s+as\s+\w+)|(?:\{[^}]*\})|(?:\w+))\s+from\s+['"]([^'"]+)['"]/);
+        // ES6 import: handles multiple patterns including combined imports
+        // - import foo from 'module'
+        // - import { foo } from 'module'
+        // - import * as foo from 'module'
+        // - import type { Foo } from 'module'
+        // - import React, { useState } from 'react' (combined default + named)
+        const es6ImportMatch = line.match(/import\s+(?:type\s+)?(?:\w+\s*,\s*)?(?:(?:\*\s+as\s+\w+)|(?:\{[^}]*\})|(?:\w+))\s+from\s+['"]([^'"]+)['"]/);
         if (es6ImportMatch) {
             imports.push({
                 importedPath: es6ImportMatch[1],

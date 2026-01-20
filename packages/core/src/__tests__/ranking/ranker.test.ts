@@ -110,7 +110,7 @@ describe('Ranker', () => {
                 relativePath: 'src/test.ts',
                 startLine: 10,
                 endLine: 20,
-                language: '.ts',
+                language: 'ts', // Normalized (without leading dot)
                 score: expect.any(Number),
             });
         });

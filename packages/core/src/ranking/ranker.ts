@@ -7,6 +7,18 @@ import { VectorSearchResult } from '../vectordb/types';
 import { RankingConfig, RankedSearchResult, RankingFactors, DEFAULT_RANKING_CONFIG } from './types';
 import { calculateAllFactors } from './factors';
 
+/**
+ * Get normalized language from document metadata or file extension
+ * Ensures consistent language names (removes leading dot from extensions)
+ */
+function getLanguage(metadata: { language?: string } | undefined, fileExtension: string): string {
+    if (metadata?.language) {
+        return metadata.language;
+    }
+    // Remove leading dot from file extension (e.g., '.ts' -> 'ts')
+    return fileExtension.startsWith('.') ? fileExtension.slice(1) : fileExtension;
+}
+
 export class Ranker {
     private config: RankingConfig;
 
@@ -64,7 +76,7 @@ export class Ranker {
                 relativePath: result.document.relativePath,
                 startLine: result.document.startLine,
                 endLine: result.document.endLine,
-                language: result.document.metadata?.language || result.document.fileExtension,
+                language: getLanguage(result.document.metadata, result.document.fileExtension),
                 score: result.score,
             }));
         }
@@ -96,7 +108,7 @@ export class Ranker {
                 relativePath: result.document.relativePath,
                 startLine: result.document.startLine,
                 endLine: result.document.endLine,
-                language: result.document.metadata?.language || result.document.fileExtension,
+                language: getLanguage(result.document.metadata, result.document.fileExtension),
                 score: finalScore,
             };
 

@@ -114,6 +114,24 @@ import './styles.css';
             expect(imports).toHaveLength(1);
             expect(imports[0].language).toBe('ts');
         });
+
+        it('should extract combined default and named imports', () => {
+            // Common React pattern: import React, { useState } from 'react'
+            const code = `import React, { useState } from 'react';`;
+            const imports = analyzer.analyzeFile(code, 'typescript', 'component.tsx');
+
+            expect(imports).toHaveLength(1);
+            expect(imports[0].importedPath).toBe('react');
+            expect(imports[0].language).toBe('typescript');
+        });
+
+        it('should extract combined default and multiple named imports', () => {
+            const code = `import foo, { bar, baz, qux } from 'module';`;
+            const imports = analyzer.analyzeFile(code, 'javascript', 'test.js');
+
+            expect(imports).toHaveLength(1);
+            expect(imports[0].importedPath).toBe('module');
+        });
     });
 
     describe('Python imports', () => {

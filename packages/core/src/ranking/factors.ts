@@ -13,6 +13,14 @@ function escapeRegex(str: string): string {
 }
 
 /**
+ * Clamp a score to the [0, 1] range
+ * Used by all ranking factor calculations to ensure normalized output
+ */
+function clamp01(score: number): number {
+    return Math.max(0, Math.min(1, score));
+}
+
+/**
  * Scale factor for exponential saturation in term frequency scoring.
  * With k=100, typical normalized scores map as:
  *   - 0.01 (1% match density) → ~0.63 score
@@ -31,6 +39,13 @@ const SIGMOID_SCALE_FACTOR = 100;
  * @returns Recency score between 0 and 1
  */
 export function calculateRecencyScore(mtime: number, halfLifeDays: number = 90): number {
+    // Guard against invalid halfLifeDays to prevent NaN/Infinity
+    if (halfLifeDays <= 0) {
+        const now = Date.now();
+        // If halfLife is 0 or negative, only files modified "now" get score 1, all others get 0
+        return mtime >= now ? 1 : 0;
+    }
+
     const now = Date.now();
     // Use Math.max(0, ...) to handle future timestamps (clock skew, timezone issues)
     const daysSinceModification = Math.max(0, (now - mtime) / (1000 * 60 * 60 * 24));
@@ -41,7 +56,7 @@ export function calculateRecencyScore(mtime: number, halfLifeDays: number = 90):
     const score = Math.pow(2, -daysSinceModification / halfLifeDays);
 
     // Clamp to [0, 1] range
-    return Math.max(0, Math.min(1, score));
+    return clamp01(score);
 }
 
 /**
@@ -61,7 +76,7 @@ export function calculateImportScore(importCount: number, maxImportCount: number
     const score = importCount / maxImportCount;
 
     // Clamp to [0, 1] range
-    return Math.max(0, Math.min(1, score));
+    return clamp01(score);
 }
 
 /**
@@ -104,7 +119,7 @@ export function calculateTermFrequencyScore(content: string, queryTerms: string[
     // This provides better discrimination than sigmoid which always returns >= 0.5
     const score = 1 - Math.exp(-SIGMOID_SCALE_FACTOR * normalizedScore);
 
-    return Math.max(0, Math.min(1, score));
+    return clamp01(score);
 }
 
 /**
