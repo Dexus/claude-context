@@ -306,7 +306,7 @@
             "command": "grep -q 'chokidar' packages/core/package.json && echo 'Dependency added' || echo 'Dependency missing'",
             "expected": "Dependency added"
           },
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "subtask-6-2",
