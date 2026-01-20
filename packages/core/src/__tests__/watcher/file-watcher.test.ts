@@ -9,6 +9,18 @@ import {
 
 jest.mock('chokidar');
 
+// Type for mock watcher
+interface MockFSWatcher {
+    on: jest.Mock;
+    close: jest.Mock;
+    getWatched: jest.Mock;
+    add: jest.Mock;
+    unwatch: jest.Mock;
+    closed: boolean;
+    handlers: Record<string, (...args: unknown[]) => void>;
+    watchedPaths: Record<string, string[]>;
+}
+
 describe('ChokidarFileWatcher', () => {
     let tempDir: string;
     let homeDir: string;
@@ -24,9 +36,9 @@ describe('ChokidarFileWatcher', () => {
 
         // Set up chokidar mock
         const chokidar = require('chokidar');
-        const createMockFSWatcher = () => {
-            const watcher: any = {
-                on: jest.fn(function(this: any, event: string, callback: any) {
+        const createMockFSWatcher = (): MockFSWatcher => {
+            const watcher: MockFSWatcher = {
+                on: jest.fn(function(event: string, callback: (...args: unknown[]) => void) {
                     watcher.handlers[event] = callback;
                     return watcher;
                 }),
@@ -37,12 +49,12 @@ describe('ChokidarFileWatcher', () => {
                 add: jest.fn(() => watcher),
                 unwatch: jest.fn(() => watcher),
                 closed: false,
-                handlers: {} as Record<string, any>,
-                watchedPaths: {} as Record<string, string[]>
+                handlers: {},
+                watchedPaths: {}
             };
             return watcher;
         };
-        chokidar.watch.mockImplementation((paths: string | string[], _options?: any) => {
+        chokidar.watch.mockImplementation((paths: string | string[], _options?: Record<string, unknown>) => {
             const watcher = createMockFSWatcher();
             const pathStr = Array.isArray(paths) ? paths[0] : paths;
             watcher.watchedPaths = {
