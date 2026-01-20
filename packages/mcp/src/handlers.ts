@@ -780,6 +780,15 @@ export class ToolHandlers {
 
             console.log(`[CLEAR] Clearing codebase: ${absolutePath}`);
 
+            // Stop file watcher if it's running
+            try {
+                await this.context.stopWatching();
+                console.log(`[CLEAR] Stopped file watcher for: ${absolutePath}`);
+            } catch (watcherError: any) {
+                console.warn(`[CLEAR] Failed to stop file watcher for ${absolutePath}:`, watcherError.message || watcherError);
+                // Continue with clearing even if stopping watcher fails
+            }
+
             try {
                 await this.context.clearIndex(absolutePath);
                 console.log(`[CLEAR] Successfully cleared index for: ${absolutePath}`);
