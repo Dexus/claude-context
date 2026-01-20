@@ -69,8 +69,9 @@ export class Ranker {
             }));
         }
 
-        // Calculate max import count across all results for normalization
-        const maxImportCount = this.calculateMaxImportCount(results);
+        // Use global max import count if available (from indexing), otherwise calculate from results
+        // Global max ensures consistent normalization across different queries
+        const maxImportCount = this.config.globalMaxImportCount ?? this.calculateMaxImportCount(results);
 
         // Calculate final scores for each result
         const rankedResults = results.map(result => {

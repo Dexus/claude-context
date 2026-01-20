@@ -214,7 +214,8 @@ export class ABTest {
 
         const result: ABTestResult = {
             summary: {
-                totalQueries: testQueries.length,
+                // Use actual processed count (excludes skipped queries with no mock results)
+                totalQueries: metricsA.length,
                 totalDocuments,
                 timestamp: new Date().toISOString(),
             },

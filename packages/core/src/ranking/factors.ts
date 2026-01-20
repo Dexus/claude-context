@@ -12,7 +12,14 @@ function escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Scale factor for sigmoid normalization in term frequency scoring */
+/**
+ * Scale factor for exponential saturation in term frequency scoring.
+ * With k=100, typical normalized scores map as:
+ *   - 0.01 (1% match density) → ~0.63 score
+ *   - 0.05 (5% match density) → ~0.99 score
+ * This provides good discrimination for code search where term matches
+ * are typically sparse (1-5% of content).
+ */
 const SIGMOID_SCALE_FACTOR = 100;
 
 /**
@@ -25,7 +32,8 @@ const SIGMOID_SCALE_FACTOR = 100;
  */
 export function calculateRecencyScore(mtime: number, halfLifeDays: number = 90): number {
     const now = Date.now();
-    const daysSinceModification = (now - mtime) / (1000 * 60 * 60 * 24);
+    // Use Math.max(0, ...) to handle future timestamps (clock skew, timezone issues)
+    const daysSinceModification = Math.max(0, (now - mtime) / (1000 * 60 * 60 * 24));
 
     // Exponential decay: score = 2^(-days / halfLife)
     // At halfLife days, score = 0.5

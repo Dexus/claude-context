@@ -22,7 +22,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { FileSynchronizer } from './sync/synchronizer';
 import { ImportAnalyzer, ImportFrequency } from './ranking/import-analyzer';
-import { RankingConfig, DEFAULT_RANKING_CONFIG } from './ranking/types';
+import { RankingConfig, DEFAULT_RANKING_CONFIG, RankedSearchResult } from './ranking/types';
 import { Ranker } from './ranking/ranker';
 
 const DEFAULT_SUPPORTED_EXTENSIONS = [
@@ -439,6 +439,22 @@ export class Context {
     }
 
     /**
+     * Convert ranked search results to semantic search result format
+     * @param rankedResults Results from the Ranker
+     * @returns SemanticSearchResult array
+     */
+    private mapToSemanticResults(rankedResults: RankedSearchResult[]): SemanticSearchResult[] {
+        return rankedResults.map(result => ({
+            content: result.content,
+            relativePath: result.relativePath,
+            startLine: result.startLine,
+            endLine: result.endLine,
+            language: result.language,
+            score: result.score
+        }));
+    }
+
+    /**
      * Semantic search with unified implementation
      * @param codebasePath Codebase path to search in
      * @param query Search query
@@ -519,14 +535,7 @@ export class Context {
             const rankedResults = ranker.rank(searchResults, query);
 
             // 5. Convert to semantic search result format
-            const results: SemanticSearchResult[] = rankedResults.map(result => ({
-                content: result.content,
-                relativePath: result.relativePath,
-                startLine: result.startLine,
-                endLine: result.endLine,
-                language: result.language,
-                score: result.score
-            }));
+            const results = this.mapToSemanticResults(rankedResults);
 
             console.log(`✅ Found ${results.length} relevant hybrid results`);
             if (results.length > 0) {
@@ -552,14 +561,7 @@ export class Context {
             const rankedResults = ranker.rank(searchResults, query);
 
             // 4. Convert to semantic search result format
-            const results: SemanticSearchResult[] = rankedResults.map(result => ({
-                content: result.content,
-                relativePath: result.relativePath,
-                startLine: result.startLine,
-                endLine: result.endLine,
-                language: result.language,
-                score: result.score
-            }));
+            const results = this.mapToSemanticResults(rankedResults);
 
             console.log(`✅ Found ${results.length} relevant results`);
             return results;
@@ -789,7 +791,15 @@ export class Context {
         // Build import graph after ALL files are analyzed (before chunk processing)
         const importGraph = this.importAnalyzer.buildImportGraph();
         this.importFrequencyMap = importGraph.frequency;
-        console.log(`📊 Import analysis complete: ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files`);
+
+        // Calculate and store global max import count for consistent ranking normalization
+        const globalMaxImportCount = Math.max(0, ...Object.values(this.importFrequencyMap));
+        if (globalMaxImportCount > 0) {
+            this.rankingConfig.globalMaxImportCount = globalMaxImportCount;
+            this.ranker.updateConfig({ globalMaxImportCount });
+        }
+
+        console.log(`📊 Import analysis complete: ${this.importAnalyzer.getTotalImports()} imports found across ${Object.keys(this.importFrequencyMap).length} unique files (max: ${globalMaxImportCount})`);
 
         // PASS 2: Process chunks with correct import counts
         console.log(`📝 Pass 2: Processing chunks...`);
@@ -934,8 +944,8 @@ export class Context {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { filePath: _fp, startLine: _sl, endLine: _el, ...restMetadata } = chunk.metadata;
 
-                // Get import count for this file
-                const importCount = this.importFrequencyMap[relativePath] || 0;
+                // Get import count using path-aware matching (handles relative vs absolute paths)
+                const importCount = this.importAnalyzer.getImportersOfFile(relativePath).length;
 
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),
@@ -971,8 +981,8 @@ export class Context {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { filePath: _fp2, startLine: _sl2, endLine: _el2, ...restMetadata } = chunk.metadata;
 
-                // Get import count for this file
-                const importCount = this.importFrequencyMap[relativePath] || 0;
+                // Get import count using path-aware matching (handles relative vs absolute paths)
+                const importCount = this.importAnalyzer.getImportersOfFile(relativePath).length;
 
                 return {
                     id: this.generateId(relativePath, chunk.metadata.startLine || 0, chunk.metadata.endLine || 0, chunk.content),

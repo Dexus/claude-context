@@ -20,6 +20,8 @@ export interface RankingConfig {
     recencyHalfLifeDays?: number;
     /** Enable ranking system (default: true) */
     enabled?: boolean;
+    /** Global max import count from indexing (for consistent normalization across queries) */
+    globalMaxImportCount?: number;
 }
 
 /**

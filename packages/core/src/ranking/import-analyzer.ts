@@ -30,6 +30,8 @@ export interface ImportGraph {
 export class ImportAnalyzer {
     private imports: ImportInfo[] = [];
     private cachedGraph: ImportGraph | null = null;
+    private parseErrorCount: number = 0;
+    private static readonly MAX_LOGGED_ERRORS = 5;
 
     /**
      * Analyzes a code file and extracts import statements
@@ -135,8 +137,14 @@ export class ImportAnalyzer {
                 imports.push(...csImports);
             }
         } catch (error) {
-            // Log at debug level if DEBUG environment variable is set
-            if (process.env.DEBUG) {
+            this.parseErrorCount++;
+            // Log first few errors at warn level, then only if DEBUG is set
+            if (this.parseErrorCount <= ImportAnalyzer.MAX_LOGGED_ERRORS) {
+                console.warn(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${error}`);
+                if (this.parseErrorCount === ImportAnalyzer.MAX_LOGGED_ERRORS) {
+                    console.warn(`[ImportAnalyzer] Suppressing further parse error warnings. Set DEBUG=1 for all errors.`);
+                }
+            } else if (process.env.DEBUG) {
                 console.debug(`[ImportAnalyzer] Failed to parse line ${lineNumber} in ${filePath}: ${error}`);
             }
         }
@@ -478,6 +486,7 @@ export class ImportAnalyzer {
     reset(): void {
         this.imports = [];
         this.cachedGraph = null;
+        this.parseErrorCount = 0;
     }
 
     /**
