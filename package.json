@@ -63,8 +63,8 @@
             "tree-sitter-rust",
             "tree-sitter-typescript"
         ],
-        "overrides": {
-            "tree-sitter@>0.21.1": "0.21.1"
+        "peerDependencyRules": {
+            "ignoreMissing": ["tree-sitter"]
         }
     }
 }
