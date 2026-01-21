@@ -7,7 +7,7 @@
     "types": "dist/index.d.ts",
     "bin": "dist/index.js",
     "scripts": {
-        "build": "yarn clean && tsc --build --force",
+        "build": "pnpm clean && tsc --build --force",
         "dev": "tsx --watch src/index.ts",
         "clean": "rm -rf dist",
         "lint": "eslint src --ext .ts",
@@ -17,7 +17,7 @@
         "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
         "start": "tsx src/index.ts",
         "start:with-env": "OPENAI_API_KEY=${OPENAI_API_KEY:your-api-key-here} MILVUS_ADDRESS=${MILVUS_ADDRESS:localhost:19530} tsx src/index.ts",
-        "prepublishOnly": "yarn build"
+        "prepublishOnly": "pnpm build"
     },
     "dependencies": {
         "@dexus1985/claude-context-core": "workspace:*",
