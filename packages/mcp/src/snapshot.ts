@@ -190,6 +190,42 @@ export class SnapshotManager {
         }
     }
 
+    public async verifyCollections(): Promise<void> {
+        console.log('[SNAPSHOT-DEBUG] Verifying vector DB collections for indexed codebases...');
+
+        try {
+            // Validate that the collections still exist in vector DB
+            const validCodebases: string[] = [];
+            for (const codebasePath of this.indexedCodebases) {
+                try {
+                    const hasCollection = await this.context.hasIndex(codebasePath);
+                    if (hasCollection) {
+                        validCodebases.push(codebasePath);
+                        console.log(`[SNAPSHOT-DEBUG] Verified collection exists: ${codebasePath}`);
+                    } else {
+                        console.warn(`[SNAPSHOT-DEBUG] Collection no longer exists in vector DB, removing: ${codebasePath}`);
+                    }
+                } catch (error) {
+                    // Log warning but don't crash if vector DB is unavailable
+                    console.warn(`[SNAPSHOT-DEBUG] Error verifying collection for ${codebasePath}:`, error);
+                    console.warn(`[SNAPSHOT-DEBUG] Treating ${codebasePath} as valid due to verification error`);
+                    validCodebases.push(codebasePath);
+                }
+            }
+
+            // Update state if any collections were removed
+            if (validCodebases.length !== this.indexedCodebases.length) {
+                console.log(`[SNAPSHOT-DEBUG] Collection verification complete. Removed ${this.indexedCodebases.length - validCodebases.length} invalid entries.`);
+                this.indexedCodebases = validCodebases;
+                this.saveCodebaseSnapshot();
+            } else {
+                console.log(`[SNAPSHOT-DEBUG] Collection verification complete. All ${validCodebases.length} collections verified.`);
+            }
+        } catch (error: any) {
+            console.error('[SNAPSHOT-DEBUG] Error during collection verification:', error);
+        }
+    }
+
     public saveCodebaseSnapshot(): void {
         console.log('[SNAPSHOT-DEBUG] Saving codebase snapshot to:', this.snapshotFilePath);
 
