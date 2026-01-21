@@ -121,7 +121,7 @@ export class SnapshotManager {
         this.addIndexedCodebase(codebasePath);
     }
 
-    public loadCodebaseSnapshot(): void {
+    public async loadCodebaseSnapshot(): Promise<void> {
         console.log('[SNAPSHOT-DEBUG] Loading codebase snapshot from:', this.snapshotFilePath);
 
         try {

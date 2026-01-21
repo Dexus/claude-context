@@ -79,9 +79,6 @@ class ContextMcpServer {
         this.syncManager = new SyncManager(this.context, this.snapshotManager);
         this.toolHandlers = new ToolHandlers(this.context, this.snapshotManager);
 
-        // Load existing codebase snapshot on startup
-        this.snapshotManager.loadCodebaseSnapshot();
-
         this.setupTools();
     }
 
@@ -336,6 +333,10 @@ Use **search_code** for simple, direct queries with known terminology:
         await this.server.connect(transport);
         console.log("MCP server started and listening on stdio.");
         console.log('[SYNC-DEBUG] Server connection established successfully');
+
+        // Load existing codebase snapshot and verify collections
+        console.log('[SYNC-DEBUG] Loading codebase snapshot...');
+        await this.snapshotManager.loadCodebaseSnapshot();
 
         // Start background sync after server is connected
         console.log('[SYNC-DEBUG] Initializing background sync...');
