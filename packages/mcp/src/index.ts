@@ -338,6 +338,10 @@ Use **search_code** for simple, direct queries with known terminology:
         console.log('[SYNC-DEBUG] Loading codebase snapshot...');
         await this.snapshotManager.loadCodebaseSnapshot();
 
+        // Verify collections match loaded snapshot
+        console.log('[SYNC-DEBUG] Verifying collections...');
+        await this.snapshotManager.verifyCollections();
+
         // Start background sync after server is connected
         console.log('[SYNC-DEBUG] Initializing background sync...');
         this.syncManager.startBackgroundSync();
